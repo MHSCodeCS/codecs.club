@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Code CS
 
-## Getting Started
+A provider-hosted Python learning workspace replacing Colab for two persistent groups: basic and advanced. Students use persistent name codes; admins manage lessons, assignments, review, and remote assistance.
 
-First, run the development server:
+## Documentation
 
-```bash
+Start at the [documentation index](docs/README.md). Specifications are split by student experience, admin dashboard, assignments, Python/assistance, data/access, UI, deployment, and pending decisions/verification.
+
+The website remains a Next.js starter. Convex cloud development is connected, but application tables, functions, authentication, and learning features are not implemented. See [verified setup](docs/deployment.md).
+
+## Development
+
+```powershell
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+In a second terminal, with this project's development deployment selected:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+npx convex dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [localhost:3000](http://localhost:3000). Convex watches and syncs backend code to the selected dev deployment; this command is not read-only. Do not commit environment files or credentials. This setup uses local code with a cloud development database.
 
-## Learn More
+## Checks and contributor guidance
 
-To learn more about Next.js, take a look at the following resources:
+Available scripts are `npm run lint`, `npm run typecheck`, `npm run build`, and `npm run start` (after a build). Lint, route type generation, TypeScript checking, and the starter production build pass. Dependency audit findings and environment limits are in [decisions and verification](docs/decisions-and-verification.md); product features remain unimplemented.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Read [AGENTS.md](AGENTS.md). Before Next.js changes, read the relevant installed guide in `node_modules/next/dist/docs/`. Before Convex changes, read `convex/_generated/ai/guidelines.md` and applicable skills.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+No domain or frontend hosting is provisioned. Managed hosting and browser Python are the agreed direction; see [deployment](docs/deployment.md).

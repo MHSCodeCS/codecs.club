@@ -1,24 +1,15 @@
-# Code CS App Design Doc
+# Code CS Design Documentation
 
-## Pages
-- Home/Login
-	- Students sign in with a student specific code
-	- Teachers sign in with their school google account
-	- Student codes are linked to specific classes during setup
-- Assignments
-	- Lists active assignments for the current session issued by teacher
-	- Can include open ended (starts with blank file) and guided assignments (like colabs)
-	- Open files in the IDE page
-- IDE Page
-	- In browser python IDE
-	- Assignments open in here
-	- Teachers can view all students who are working on this his page in real time.
-- Class Management (For teachers)
-	- Add students from roster
-	- Manage students
-	- Print login tickets
-	- Take attendance
-- Assignment Management
-	- Create assignments
-	- Assign assignments to classes
-	- Save draft assignments
+The specification has been split into focused guides. Start at the [documentation index](docs/README.md).
+
+- [Product overview and capacity](docs/product-overview.md)
+- [Student experience](docs/student-experience.md)
+- [Admin dashboard](docs/admin-dashboard.md)
+- [Curriculum, assignments, and review](docs/curriculum-and-assignments.md)
+- [Python workspace and assistance](docs/python-and-assistance.md)
+- [Data, identity, and access](docs/data-and-access.md)
+- [UI requirements](docs/ui-design.md)
+- [Development and deployment](docs/deployment.md)
+- [Pending decisions and verification](docs/decisions-and-verification.md)
+
+These are agreed requirements, not completed features. Current setup and evidence are dated in the deployment and verification guides. Unresolved decisions are tracked explicitly rather than filled with unapproved defaults.
