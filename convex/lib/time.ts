@@ -32,6 +32,12 @@ export function zonedParts(timestamp: number, timeZone: string): ZonedParts {
   };
 }
 
+/** Calendar date in `timeZone` as "YYYY-MM-DD", which sorts like the dates. */
+export function zonedDateKey(timestamp: number, timeZone: string): string {
+  const p = zonedParts(timestamp, timeZone);
+  return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+}
+
 function offsetAt(timestamp: number, timeZone: string): number {
   const p = zonedParts(timestamp, timeZone);
   const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);

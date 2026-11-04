@@ -6,7 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, LoadingState } from "@/components/ui/States";
 import { api } from "@/convex/_generated/api";
 import { formatWeekdayDate, formatYear, isSameDay } from "@/lib/format";
-import { focusDay } from "@/lib/progress";
+import { focusDay, nextOpening } from "@/lib/progress";
 import { useNow } from "@/lib/useNow";
 import { AssignmentRow } from "./AssignmentRow";
 import { DaysCompleteBar, DayTrack } from "./DayTrack";
@@ -18,6 +18,7 @@ export function LearningHome() {
 
   const { days, timeZone } = home;
   const focus = focusDay(days, now, timeZone);
+  const upcoming = focus === null ? nextOpening(days) : null;
   const focusIsToday =
     focus?.lessonAt != null && isSameDay(focus.lessonAt, now, timeZone);
 
@@ -79,6 +80,15 @@ export function LearningHome() {
                 ))}
               </div>
             )}
+          </section>
+        ) : upcoming && upcoming.lessonAt !== null ? (
+          <section aria-labelledby="focus-title" className="rounded-[22px] bg-sf px-[18px] pt-4 pb-[18px]">
+            <h2 id="focus-title" className="m-0 ml-1 text-[22px] leading-[1.2] font-bold tracking-[-.02em]">
+              Day {upcoming.order}: {upcoming.topic}
+            </h2>
+            <p className="mt-2 mb-0 ml-1 text-sm text-ink2">
+              Opens {formatWeekdayDate(upcoming.lessonAt, timeZone)}, the day of the lesson.
+            </p>
           </section>
         ) : (
           <div />

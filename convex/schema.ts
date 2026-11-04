@@ -94,9 +94,12 @@ export default defineSchema({
     curriculumId: v.id("curricula"),
     order: v.number(),
     topic: v.string(),
+    /** Cover image in Convex file storage, uploaded on Curriculum. */
     coverImageId: v.optional(v.id("_storage")),
     slidesUrl: v.optional(v.string()),
-  }).index("by_curriculumId_and_order", ["curriculumId", "order"]),
+  })
+    .index("by_curriculumId_and_order", ["curriculumId", "order"])
+    .index("by_coverImageId", ["coverImageId"]),
 
   /** Year-specific lesson date. Turn-in never closes, so this is only the lesson. */
   lessonSchedules: defineTable({
@@ -108,6 +111,17 @@ export default defineSchema({
   })
     .index("by_dayId_and_year", ["dayId", "year"])
     .index("by_year_and_lessonAt", ["year", "lessonAt"]),
+
+  /**
+   * Today's date in the school time zone ("YYYY-MM-DD"), kept current by a
+   * cron. Student queries read it to decide which lesson days are open (D04),
+   * so they re-run when the date changes instead of reading the wall clock.
+   */
+  schoolClock: defineTable({
+    today: v.string(),
+    timeZone: v.string(),
+    updatedAt: v.number(),
+  }),
 
   /** Single document holding admin-editable behavior. */
   settings: defineTable({
@@ -131,9 +145,17 @@ export default defineSchema({
     publishedRevisionId: v.optional(v.id("assignmentRevisions")),
   }).index("by_dayId_and_order", ["dayId", "order"]),
 
-  /** Immutable-once-published task content and evaluation rule. */
+  /**
+   * Task content and evaluation rule. A revision is edited in place only while
+   * it is an unpublished draft; once published it never changes, and the next
+   * edit starts a new revision (D08). Checks and turn-ins name the revision
+   * they were judged with.
+   */
   assignmentRevisions: defineTable({
     assignmentId: v.id("assignments"),
+    /** Title and type as drafted; publishing copies them to the assignment. Unset on seeded rows. */
+    title: v.optional(v.string()),
+    type: v.optional(assignmentTypeValidator),
     summary: v.string(),
     instructions: v.string(),
     expectedOutput: v.optional(v.string()),
@@ -148,6 +170,16 @@ export default defineSchema({
     checkInput: v.optional(v.string()),
     createdBy: v.id("users"),
     createdAt: v.number(),
+    /** Last draft save. Unset on seeded rows (read as createdAt). */
+    updatedBy: v.optional(v.id("users")),
+    updatedAt: v.optional(v.number()),
+    /**
+     * Task version students see: 1 for the first publish, then 2, 3, … Set when
+     * published. Unset on seeded published rows, which read as version 1.
+     */
+    version: v.optional(v.number()),
+    publishedBy: v.optional(v.id("users")),
+    publishedAt: v.optional(v.number()),
   }).index("by_assignmentId", ["assignmentId"]),
 
   /** A student's working copy for one assignment, with historical context. */
@@ -229,6 +261,8 @@ export default defineSchema({
     attempt: v.number(),
     versionId: v.id("workVersions"),
     submittedAt: v.number(),
+    /** The published task revision when it was turned in (D08). Unset before Phase 7. */
+    revisionId: v.optional(v.id("assignmentRevisions")),
     checkResultId: v.optional(v.id("checkResults")),
     /**
      * "superseded": a later attempt was turned in before this one was

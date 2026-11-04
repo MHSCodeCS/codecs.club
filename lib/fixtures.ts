@@ -115,35 +115,6 @@ export const myWorkFixture: WorkGroup[] = [
   },
 ];
 
-/* ---------- 4h Admin Assignments ---------- */
-
-export const assignmentEditorFixture = {
-  dayLabel: "Day 5: Loops",
-  dayShort: "Day 5",
-  savedAt: pt("2026-10-15T17:42:00Z"),
-  siblings: [
-    { id: "countdown", title: "Countdown", status: "published" as const, type: "guided" as const },
-    { id: "forever", title: "Forever greeter", status: "published" as const, type: "guided" as const },
-    { id: "loopart", title: "Loop art", status: "published" as const, type: "open" as const },
-    { id: "skip", title: "Skip counter", status: "draft" as const, type: "guided" as const },
-  ],
-  draft: {
-    id: "skip",
-    title: "Skip counter",
-    type: "guided" as "guided" | "open",
-    instructions:
-      "Print every third number from **3** up to **30**. When you’re done counting, print `Done!`",
-    starterFiles: [{ name: "main.py", content: 'start = 3\n# your loop here\nprint("Done!")\n' }],
-    parts: [
-      { name: "Starts at 3", kind: "begins" as const, expected: "3 6" },
-      { name: "Counts by threes to 30", kind: "containsInOrder" as const, expected: "3 6 9 12 15 18 21 24 27 30" },
-      { name: "Ends with Done!", kind: "ends" as const, expected: "Done!" },
-    ],
-    partialMin: 2,
-    loopCheck: false,
-  },
-};
-
 /* ---------- 4i Admin Assistance ---------- */
 
 export type Presence = "online" | "idle" | "offline";

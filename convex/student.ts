@@ -1,12 +1,12 @@
 import { v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { getSettings, requireStudent } from "./lib/access";
 import { adminFirstName } from "./lib/adminNames";
+import { dayWork, lessonDateReached, lessonSchedule, schoolToday } from "./lib/dayAccess";
 import { assignmentTypeValidator, groupValidator, outcomeValidator } from "./schema";
 
 const MAX_DAYS = 100;
-const MAX_ASSIGNMENTS_PER_DAY = 50;
 
 const assignmentSummaryValidator = v.object({
   _id: v.id("assignments"),
@@ -24,32 +24,37 @@ const dayValidator = v.object({
   order: v.number(),
   topic: v.string(),
   lessonAt: v.union(v.number(), v.null()),
+  /** Whether the student may open the day (D04); closed days list no assignments. */
+  open: v.boolean(),
   assignments: v.array(assignmentSummaryValidator),
 });
 
 type AssignmentSummary = typeof assignmentSummaryValidator.type;
 
-/** Published assignments on a day, with this student's progress on each. */
-async function assignmentSummaries(
+/**
+ * Whether the student may open a day, and its published assignments with
+ * their progress when they may. A day opens on its lesson date (D04) and
+ * stays open to a student who already has work on it (D13).
+ */
+async function studentDay(
   ctx: QueryCtx,
   student: Doc<"students">,
-  dayId: Id<"days">,
-): Promise<AssignmentSummary[]> {
-  const assignments = await ctx.db
-    .query("assignments")
-    .withIndex("by_dayId_and_order", (q) => q.eq("dayId", dayId))
-    .take(MAX_ASSIGNMENTS_PER_DAY);
-  const summaries: AssignmentSummary[] = [];
-  for (const assignment of assignments) {
-    // Drafts never reach students.
+  day: Doc<"days">,
+  calendar: { year: string; timeZone: string; today: string },
+): Promise<{ lessonAt: number | null; open: boolean; assignments: AssignmentSummary[] }> {
+  const schedule = await lessonSchedule(ctx, day._id, calendar.year);
+  const lessonAt = schedule?.lessonAt ?? null;
+  const work = await dayWork(ctx, student._id, day._id);
+  const open =
+    lessonDateReached(lessonAt, calendar.today, calendar.timeZone) ||
+    work.some((row) => row.workspace !== null);
+  if (!open) return { lessonAt, open, assignments: [] };
+
+  const assignments: AssignmentSummary[] = [];
+  for (const { assignment, workspace } of work) {
+    // Drafts and unpublished assignments never reach the day; work on them is kept.
     if (assignment.status !== "published" || !assignment.publishedRevisionId) continue;
     const revision = await ctx.db.get("assignmentRevisions", assignment.publishedRevisionId);
-    const workspace = await ctx.db
-      .query("workspaces")
-      .withIndex("by_studentId_and_assignmentId", (q) =>
-        q.eq("studentId", student._id).eq("assignmentId", assignment._id),
-      )
-      .unique();
     const latestSubmission = workspace
       ? await ctx.db
           .query("submissions")
@@ -64,7 +69,7 @@ async function assignmentSummaries(
           .order("desc")
           .first()
       : null;
-    summaries.push({
+    assignments.push({
       _id: assignment._id,
       title: assignment.title,
       type: assignment.type,
@@ -75,14 +80,7 @@ async function assignmentSummaries(
       latestOutcome: latestCheck?.outcome ?? null,
     });
   }
-  return summaries;
-}
-
-async function scheduleFor(ctx: QueryCtx, dayId: Id<"days">, year: string) {
-  return await ctx.db
-    .query("lessonSchedules")
-    .withIndex("by_dayId_and_year", (q) => q.eq("dayId", dayId).eq("year", year))
-    .unique();
+  return { lessonAt, open, assignments };
 }
 
 /** Learning home: the student's current curriculum as an ordered day track. */
@@ -119,15 +117,18 @@ export const home = query({
       .query("days")
       .withIndex("by_curriculumId_and_order", (q) => q.eq("curriculumId", curriculum._id))
       .take(MAX_DAYS);
+    const calendar = {
+      year: settings.currentYear,
+      timeZone: settings.timeZone,
+      today: await schoolToday(ctx, settings.timeZone),
+    };
     const days = [];
     for (const day of dayDocs) {
-      const schedule = await scheduleFor(ctx, day._id, settings.currentYear);
       days.push({
         _id: day._id,
         order: day.order,
         topic: day.topic,
-        lessonAt: schedule?.lessonAt ?? null,
-        assignments: await assignmentSummaries(ctx, student, day._id),
+        ...(await studentDay(ctx, student, day, calendar)),
       });
     }
 
@@ -168,7 +169,11 @@ export const home = query({
   },
 });
 
-/** One lesson day in the student's current curriculum. */
+/**
+ * One lesson day in the student's current curriculum. A day that isn't open
+ * yet (D04) returns only its number, topic and date, so the page can say
+ * when it opens; its slides, cover and assignments stay hidden.
+ */
 export const day = query({
   args: { dayId: v.string() },
   returns: v.union(
@@ -184,6 +189,7 @@ export const day = query({
         slidesUrl: v.union(v.string(), v.null()),
         coverUrl: v.union(v.string(), v.null()),
         lessonAt: v.union(v.number(), v.null()),
+        open: v.boolean(),
       }),
       assignments: v.array(assignmentSummaryValidator),
     }),
@@ -197,7 +203,11 @@ export const day = query({
     if (dayDoc === null || dayDoc.curriculumId !== student.curriculumId) return null;
     const settings = await getSettings(ctx);
     const curriculum = await ctx.db.get("curricula", dayDoc.curriculumId);
-    const schedule = await scheduleFor(ctx, dayDoc._id, settings.currentYear);
+    const { lessonAt, open, assignments } = await studentDay(ctx, student, dayDoc, {
+      year: settings.currentYear,
+      timeZone: settings.timeZone,
+      today: await schoolToday(ctx, settings.timeZone),
+    });
     return {
       curriculumName: curriculum?.name ?? "",
       year: settings.currentYear,
@@ -206,11 +216,13 @@ export const day = query({
         _id: dayDoc._id,
         order: dayDoc.order,
         topic: dayDoc.topic,
-        slidesUrl: dayDoc.slidesUrl ?? null,
-        coverUrl: dayDoc.coverImageId ? await ctx.storage.getUrl(dayDoc.coverImageId) : null,
-        lessonAt: schedule?.lessonAt ?? null,
+        slidesUrl: open ? (dayDoc.slidesUrl ?? null) : null,
+        coverUrl:
+          open && dayDoc.coverImageId ? await ctx.storage.getUrl(dayDoc.coverImageId) : null,
+        lessonAt,
+        open,
       },
-      assignments: await assignmentSummaries(ctx, student, dayDoc._id),
+      assignments,
     };
   },
 });

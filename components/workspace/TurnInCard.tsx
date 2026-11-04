@@ -87,6 +87,7 @@ export function TurnInCard({
           ) : (
             "waiting for review"
           )}
+          {latest.olderTask && " · for an older version of the task"}
         </span>
       )}
       {feedback && (

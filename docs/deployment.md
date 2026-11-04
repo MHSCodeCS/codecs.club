@@ -1,6 +1,6 @@
 # Development Setup and Deployment
 
-[Documentation index](README.md). Updated **October 15, 2026**. The October 14 inspection used local files and read-only Convex MCP calls; the October 15 work added the application backend source and ran local checks (see [verification](decisions-and-verification.md)).
+[Documentation index](README.md). Updated **October 28, 2026** (Phase 7 update steps below). The October 14 inspection used local files and read-only Convex MCP calls; the October 15 work added the application backend source and ran local checks (see [verification](decisions-and-verification.md)).
 
 ## Verified setup
 
@@ -66,6 +66,10 @@ It removes Python Fundamentals' empty Days 7–8 (Functions, Final project), ren
 ```bash
 npx convex run admins:setDisplayName '{"username":"rivera","displayName":"Max"}'
 ```
+
+### Updating a deployment for Phase 7 (October 28, 2026)
+
+Sync the code with `npx convex dev`. The schema change is additive, so no data needs to change: seeded assignments read as task version 1 and earlier turn-ins fall back to their check's revision. Phase 7 adds one cron (`convex/crons.ts`, “advance the school day”) that runs `schoolClock:advance` every 10 minutes and writes at most once a day, after midnight in the school time zone, so student pages notice when a lesson day opens (D04). Until its first run, student queries use the server's clock. Cover images go to the deployment's Convex file storage.
 
 ## Daily development
 

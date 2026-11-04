@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { getSettings, requireStudent } from "./lib/access";
 import { adminFirstName } from "./lib/adminNames";
+import { dayOpenForStudent, schoolToday, schoolTodayNow } from "./lib/dayAccess";
 import { appError } from "./lib/errors";
 import { MAX_PACKAGES, packageKey, packageSpecProblem } from "./lib/packages";
 import {
@@ -63,13 +64,17 @@ export async function requireOwnWorkspace(
 
 /**
  * An assignment the student may open: their own existing workspace (including
- * past curricula), or a published assignment in their current curriculum.
- * Drafts never open.
+ * past curricula and assignments unpublished since), or a published
+ * assignment in their current curriculum on a day that is open to them (D04:
+ * from its lesson date, or earlier work on the day). Drafts never open.
+ * `today` is the school date: `schoolToday` in queries, `schoolTodayNow` in
+ * mutations.
  */
 async function openableAssignment(
   ctx: AuthCtx,
   student: Doc<"students">,
   rawAssignmentId: string,
+  calendar: { settings: Doc<"settings">; today: string },
 ) {
   const assignmentId = ctx.db.normalizeId("assignments", rawAssignmentId);
   if (assignmentId === null) return null;
@@ -92,6 +97,14 @@ async function openableAssignment(
       revision !== null &&
       day.curriculumId === student.curriculumId;
     if (!startable) return null;
+    const { open } = await dayOpenForStudent(ctx, {
+      student,
+      day,
+      year: calendar.settings.currentYear,
+      timeZone: calendar.settings.timeZone,
+      today: calendar.today,
+    });
+    if (!open) return null;
   }
   return { assignment, day, revision, workspace };
 }
@@ -173,10 +186,13 @@ export const get = query({
   ),
   handler: async (ctx, args) => {
     const { student } = await requireStudent(ctx);
-    const found = await openableAssignment(ctx, student, args.assignmentId);
+    const settings = await getSettings(ctx);
+    const found = await openableAssignment(ctx, student, args.assignmentId, {
+      settings,
+      today: await schoolToday(ctx, settings.timeZone),
+    });
     if (found === null) return null;
     const { assignment, day, revision, workspace } = found;
-    const settings = await getSettings(ctx);
     const files = workspace ? await workingFiles(ctx, workspace._id) : [];
     return {
       timeZone: settings.timeZone,
@@ -206,24 +222,31 @@ export const get = query({
 });
 
 /**
- * Returns the student's workspace for an assignment, creating it from the
- * published starter files (as version 1) the first time.
+ * Returns the student's workspace for an assignment, creating it the first
+ * time (only on a day open to the student, D04) from the published starter
+ * files as version 1. Open-ended work starts from a blank main.py. Starter
+ * files are copied once: later task versions never change them (D08).
  */
 export const open = mutation({
   args: { assignmentId: v.string() },
   returns: v.id("workspaces"),
   handler: async (ctx, args) => {
     const { userId, student } = await requireStudent(ctx);
-    const found = await openableAssignment(ctx, student, args.assignmentId);
+    const settings = await getSettings(ctx);
+    const found = await openableAssignment(ctx, student, args.assignmentId, {
+      settings,
+      today: schoolTodayNow(settings.timeZone),
+    });
     if (found === null) throw appError("NOT_FOUND", "This assignment isn’t available.");
     if (found.workspace !== null) return found.workspace._id;
     const { assignment, day, revision } = found;
     if (revision === null) throw appError("NOT_FOUND", "This assignment isn’t available.");
 
-    const settings = await getSettings(ctx);
     const now = Date.now();
     const starter = snapshot(
-      revision.starterFiles.length > 0 ? revision.starterFiles : [{ name: "main.py", content: "" }],
+      assignment.type === "guided" && revision.starterFiles.length > 0
+        ? revision.starterFiles
+        : [{ name: "main.py", content: "" }],
     );
     const workspaceId = await ctx.db.insert("workspaces", {
       studentId: student._id,

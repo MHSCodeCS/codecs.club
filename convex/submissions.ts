@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { adminFirstName } from "./lib/adminNames";
 import { appError } from "./lib/errors";
+import { olderTask } from "./lib/revisions";
 import { sameFiles } from "./lib/workFiles";
 import { submissionStatusValidator } from "./schema";
 import { latestVersion, requireOwnWorkspace, snapshot, workingFiles } from "./workspaces";
@@ -13,7 +14,9 @@ import { latestVersion, requireOwnWorkspace, snapshot, workingFiles } from "./wo
  * exactly what is saved. Retries with the same idempotency key return the
  * attempt they already made. Turning in again before review adds an attempt
  * and takes the earlier one out of the review queue (D09). Turn-in never
- * closes: there is no due date or cutoff (D05 superseded).
+ * closes: there is no due date or cutoff (D05 superseded). Each attempt
+ * records the published task revision it was turned in under (D08). Only the
+ * workspace's owner turns in, so its day is open to them (D04 kept access).
  */
 
 /** Earlier attempts read when looking for the latest student-visible feedback. */
@@ -133,6 +136,7 @@ export const turnIn = mutation({
       attempt,
       versionId,
       submittedAt: now,
+      revisionId: assignment.publishedRevisionId,
       checkResultId: check?._id,
       status: "unreviewed",
       idempotencyKey: key,
@@ -160,6 +164,8 @@ export const forWorkspace = query({
         status: submissionStatusValidator,
         reviewedAt: v.union(v.number(), v.null()),
         reviewerName: v.union(v.string(), v.null()),
+        /** Turned in under an earlier version of the task (D08). */
+        olderTask: v.boolean(),
       }),
     ),
     feedback: v.union(
@@ -189,6 +195,13 @@ export const forWorkspace = query({
     let latest = null;
     if (newest !== undefined) {
       const submitted = await ctx.db.get("workVersions", newest.versionId);
+      const assignment = await ctx.db.get("assignments", workspace.assignmentId);
+      const published = assignment?.publishedRevisionId
+        ? await ctx.db.get("assignmentRevisions", assignment.publishedRevisionId)
+        : null;
+      const check = newest.checkResultId
+        ? await ctx.db.get("checkResults", newest.checkResultId)
+        : null;
       latest = {
         attempt: newest.attempt,
         submittedAt: newest.submittedAt,
@@ -196,6 +209,11 @@ export const forWorkspace = query({
         status: newest.status,
         reviewedAt: newest.reviewedAt ?? null,
         reviewerName: newest.reviewedBy ? await adminFirstName(ctx, newest.reviewedBy) : null,
+        olderTask: olderTask(
+          published,
+          newest.revisionId ?? check?.revisionId ?? null,
+          newest.submittedAt,
+        ),
       };
     }
 

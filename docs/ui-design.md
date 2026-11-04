@@ -87,7 +87,7 @@ The student side is designed for the **1366×768 Chromebook**; the login page al
 | Width | Name | Admin layout |
 | --- | --- | --- |
 | < 640 px | phone (`max-sm`) | Login's admin fields go full width; Settings' label/value pairs stack |
-| < 768 px | phone (`max-md`) | 16 px side padding and smaller page titles. Tables stack into cards (Students roster: name and login code, then attendance; History: when and who, then the change, before and after). Pickers and selects go full width at 44 px tall; buttons and segmented controls grow to about 44 px. Side panels become full-screen sheets with a “← Back” bar (Escape also closes, and focus returns to what opened them): the student drawer, the selected student on Assistance, and a student's attempt on Review, which shows the queue alone until someone is picked. Curriculum adds a Day picker and lists a day's assignments first; the year timeline scrolls inside its own box, starting at the selected lesson |
+| < 768 px | phone (`max-md`) | 16 px side padding and smaller page titles. Tables stack into cards (Students roster: name and login code, then attendance; History: when and who, then the change, before and after). Pickers and selects go full width at 44 px tall; buttons and segmented controls grow to about 44 px. Side panels become full-screen sheets with a “← Back” bar (Escape also closes, and focus returns to what opened them): the student drawer, the selected student on Assistance, and a student's attempt on Review, which shows the queue alone until someone is picked. Curriculum adds a Day picker and lists a day's assignments first; the year timeline scrolls inside its own box, starting at the selected lesson. Assignments stacks its day cards; the assignment editor stacks the day's assignments (with ↑/↓), the details and the evaluation, with full-width Save draft and Publish |
 | 768–1279 px | tablet / small laptop (`md`, `lg`) | Desktop padding and type; panels stack in one column (Curriculum's day panels go side by side from `lg`) |
 | < 1280 px | (`max-xl`) | The admin navigation collapses into a compact top bar: CodeCS ADMIN, the group, and a **Menu** button (it shows the help-queue count). The menu holds the basic/advanced switch, every section with its badge, the theme, the signed-in admin and Sign out; it closes on Escape, a tap outside or navigation |
 | ≥ 1280 px | desktop (`xl`) | The full header and the multi-column screens from the design, unchanged at 1366×768 |
@@ -110,12 +110,13 @@ The approved reference is the Claude Design project **CodeCS Basic v2**, saved i
 | --- | --- | --- |
 | `/` | Home / Login (4a) | Live sign-in |
 | `/learn` | Student Learning Home (4b) | Live |
-| `/learn/days/[dayId]` | Lesson Day (4c) | Live |
+| `/learn/days/[dayId]` | Lesson Day (4c) | Live; days that aren't open yet (D04) say when they open |
 | `/learn/assignments/[assignmentId]` | Assignment Workspace (4d) | Live editor and autosave (Phase 3), Python Run/Stop/input/packages (Phase 4), guided checks (Phase 5), Turn in with attempts and feedback (Phase 6); Help later |
 | `/learn/work` | Student Work History (4e) | Preview fixtures (Phase 2) |
 | `/admin/students` | Admin / Students (4f) | Live roster, attendance, student edits |
-| `/admin/curriculum` | Admin / Curriculum and Lessons (4g) | Live timeline, day content, lesson dates |
-| `/admin/assignments`, `/admin/assignments/[assignmentId]` | Admin / Assignments (4h) | Preview fixtures (Phase 7) |
+| `/admin/curriculum` | Admin / Curriculum and Lessons (4g) | Live timeline, day content, cover upload, lesson dates, add/reorder/remove days (Phase 7) |
+| `/admin/assignments` | Assignments list (no design; styled like 4g) | Live: assignments by day, new drafts (Phase 7) |
+| `/admin/assignments/[assignmentId]` | Admin / Assignments (4h) | Live editor: drafts, publishing, task versions, reorder, unpublish/remove (Phase 7) |
 | `/admin/assistance` | Admin / Assistance (4i) | Preview fixtures (Phase 9); a class list replaces the design's seating chart (D14) |
 | `/admin/review` | Admin / Review (4j) | Live queue, submitted snapshots, checks, feedback, private notes and Mark reviewed (Phase 6); “Open live working copy” goes to Assistance until Phase 9 |
 | `/admin/settings` | Settings (no design) | Live, read-only: school year and time zone |

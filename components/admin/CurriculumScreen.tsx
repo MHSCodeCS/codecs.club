@@ -2,13 +2,14 @@
 
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
-import { useState } from "react";
-import { Button, ButtonLink } from "@/components/ui/Button";
+import { useRef, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { FieldError, TextInput } from "@/components/ui/Field";
 import { Pill } from "@/components/ui/Pill";
 import { EmptyState, LoadingState } from "@/components/ui/States";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { COVER_ACCEPT, coverProblem } from "@/convex/lib/covers";
 import { errorMessage } from "@/lib/errors";
 import {
   adjacentYears,
@@ -21,7 +22,9 @@ import {
 } from "@/lib/format";
 import { slidesProvider } from "@/lib/slides";
 import { useNow } from "@/lib/useNow";
+import { AssignmentStatusPill } from "./AssignmentsScreen";
 import { useGroup } from "./GroupContext";
+import { NewAssignmentForm } from "./NewAssignmentForm";
 import { YearTimeline } from "./YearTimeline";
 
 type Overview = NonNullable<typeof api.adminCurriculum.overview._returnType>;
@@ -138,7 +141,14 @@ export function CurriculumScreen() {
                   </Button>
                 </div>
               ))}
-              <span className="text-xs text-ink3">Students see “Not scheduled” until a date is set.</span>
+              <span className="text-xs text-ink3">
+                Students see “Not scheduled” and can’t open the day until a date is set. A day opens
+                on its lesson date.
+              </span>
+              <AddDayForm
+                curriculumId={data.curriculum._id}
+                onAdded={(dayId) => setSelectedDayId(dayId)}
+              />
             </div>
           </section>
 
@@ -162,7 +172,13 @@ export function CurriculumScreen() {
 
           {selected && (
             <div className="grid gap-3.5 px-4 pt-3.5 md:px-7 lg:grid-cols-[1.1fr_1.2fr_1fr]">
-              <DayContentPanel key={`content-${selected._id}`} day={selected} />
+              <DayContentPanel
+                key={`content-${selected._id}`}
+                day={selected}
+                isFirst={selected._id === data.days[0]?._id}
+                isLast={selected._id === data.days.at(-1)?._id}
+                onRemoved={() => setSelectedDayId(null)}
+              />
               <DayAssignmentsPanel day={selected} />
               <DaySchedulePanel
                 key={`schedule-${selected._id}-${data.year}-${selected.schedule?.lessonAt ?? "none"}`}
@@ -186,7 +202,17 @@ function PanelLabel({ children, mint }: { children: React.ReactNode; mint?: bool
   );
 }
 
-function DayContentPanel({ day }: { day: OverviewDay }) {
+function DayContentPanel({
+  day,
+  isFirst,
+  isLast,
+  onRemoved,
+}: {
+  day: OverviewDay;
+  isFirst: boolean;
+  isLast: boolean;
+  onRemoved: () => void;
+}) {
   const update = useMutation(api.adminCurriculum.updateDayContent);
   const [topic, setTopic] = useState(day.topic);
   const [slidesUrl, setSlidesUrl] = useState(day.slidesUrl ?? "");
@@ -217,22 +243,7 @@ function DayContentPanel({ day }: { day: OverviewDay }) {
         </label>
         <TextInput id="day-topic" value={topic} onChange={(e) => { setTopic(e.target.value); setSaved(false); }} />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-bold">Cover image</span>
-        <div className="flex items-center gap-3">
-          <div className="relative h-[81px] w-36 flex-none overflow-hidden rounded-[10px] bg-bg">
-            {day.coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={day.coverUrl} alt="" className="size-full object-cover" />
-            ) : (
-              <span className="grid size-full place-items-center text-xs text-ink3">No cover</span>
-            )}
-          </div>
-          <span className="text-[12.5px] text-ink3">
-            Shown on the lesson page. 16:9 works best. Uploading arrives in Phase 7.
-          </span>
-        </div>
-      </div>
+      <CoverImage day={day} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor="day-slides" className="text-sm font-bold">
           Slides link
@@ -262,7 +273,258 @@ function DayContentPanel({ day }: { day: OverviewDay }) {
         </Button>
         {saved && !dirty && <span role="status" className="text-[13px] text-ink3">Saved</span>}
       </div>
+      <DayActions day={day} isFirst={isFirst} isLast={isLast} onRemoved={onRemoved} />
     </section>
+  );
+}
+
+/**
+ * The day's cover: upload to Convex file storage, replace or remove. The
+ * picker refuses a wrong type or size first; the server checks the stored
+ * file again and deletes refused uploads and replaced covers.
+ */
+function CoverImage({ day }: { day: OverviewDay }) {
+  const generateUploadUrl = useMutation(api.adminCurriculum.generateCoverUploadUrl);
+  const setCover = useMutation(api.adminCurriculum.setCover);
+  const removeCover = useMutation(api.adminCurriculum.removeCover);
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<null | "upload" | "remove">(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function upload(file: File) {
+    setError(null);
+    const problem = coverProblem(file.type, file.size);
+    if (problem !== null) {
+      setError(problem);
+      return;
+    }
+    setBusy("upload");
+    try {
+      const url = await generateUploadUrl();
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!response.ok) throw new Error(`Upload failed (${response.status})`);
+      const { storageId } = (await response.json()) as { storageId: Id<"_storage"> };
+      const result = await setCover({ dayId: day._id as Id<"days">, storageId });
+      if (!result.ok) setError(result.message);
+    } catch (e) {
+      setError(errorMessage(e, "The upload didn’t finish. Check your connection and try again."));
+    } finally {
+      setBusy(null);
+      if (input.current) input.current.value = "";
+    }
+  }
+
+  async function remove() {
+    if (!window.confirm(`Remove the cover image of Day ${day.order}?`)) return;
+    setBusy("remove");
+    setError(null);
+    try {
+      await removeCover({ dayId: day._id as Id<"days"> });
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span id="cover-label" className="text-sm font-bold">
+        Cover image
+      </span>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative h-[81px] w-36 flex-none overflow-hidden rounded-[10px] bg-bg">
+          {day.coverUrl ? (
+            // Convex storage URLs are signed and short-lived; next/image adds nothing here.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={day.coverUrl} alt={`Day ${day.order} cover`} className="size-full object-cover" />
+          ) : (
+            <span className="grid size-full place-items-center text-xs text-ink3">No cover</span>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <span className="text-[12.5px] text-ink3">
+            Shown on the lesson page. 16:9 works best. PNG, JPEG, WebP or GIF, up to 5 MB.
+          </span>
+          <div className="flex flex-wrap gap-1.5 max-md:[&>button]:h-11">
+            <input
+              ref={input}
+              type="file"
+              accept={COVER_ACCEPT}
+              aria-labelledby="cover-label"
+              className="sr-only"
+              tabIndex={-1}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void upload(file);
+              }}
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              className="bg-bg"
+              disabled={busy !== null}
+              loading={busy === "upload"}
+              loadingLabel="Uploading…"
+              onClick={() => input.current?.click()}
+            >
+              {day.coverUrl ? "Replace" : "Upload image"}
+            </Button>
+            {day.coverUrl && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy !== null}
+                loading={busy === "remove"}
+                loadingLabel="Removing…"
+                onClick={() => void remove()}
+              >
+                Remove
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+      {error && <FieldError id="cover-error">{error}</FieldError>}
+    </div>
+  );
+}
+
+/** Move the day earlier or later, or remove it when it has no assignments. */
+function DayActions({
+  day,
+  isFirst,
+  isLast,
+  onRemoved,
+}: {
+  day: OverviewDay;
+  isFirst: boolean;
+  isLast: boolean;
+  onRemoved: () => void;
+}) {
+  const moveDay = useMutation(api.adminCurriculum.moveDay);
+  const removeDay = useMutation(api.adminCurriculum.removeDay);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const empty = day.assignments.length === 0;
+
+  async function run(action: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-1 flex flex-col gap-1.5 border-t border-ln pt-3">
+      <div className="flex flex-wrap gap-1.5 max-md:[&>button]:h-11">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy || isFirst}
+          onClick={() => void run(() => moveDay({ dayId: day._id as Id<"days">, direction: "up" }))}
+        >
+          ← Earlier
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy || isLast}
+          onClick={() => void run(() => moveDay({ dayId: day._id as Id<"days">, direction: "down" }))}
+        >
+          Later →
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="hover:text-cor-i md:ml-auto"
+          disabled={busy || !empty}
+          title={empty ? undefined : "Only days without assignments can be removed."}
+          onClick={() => {
+            if (!window.confirm(`Remove Day ${day.order}: ${day.topic}? Later days move up one.`)) return;
+            void run(async () => {
+              await removeDay({ dayId: day._id as Id<"days"> });
+              onRemoved();
+            });
+          }}
+        >
+          Remove day
+        </Button>
+      </div>
+      <span className="text-xs text-ink3">
+        Moving a day renumbers the days after it.{" "}
+        {empty ? "This day has no assignments, so it can be removed." : "Days with assignments can’t be removed."}
+      </span>
+      {error && <FieldError id="day-actions-error">{error}</FieldError>}
+    </div>
+  );
+}
+
+/** Adds an unscheduled day at the end of the curriculum. */
+function AddDayForm({
+  curriculumId,
+  onAdded,
+}: {
+  curriculumId: string;
+  onAdded: (dayId: string) => void;
+}) {
+  const addDay = useMutation(api.adminCurriculum.addDay);
+  const [topic, setTopic] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <form
+      aria-label="Add a day"
+      className="mt-1 flex flex-col gap-1.5 border-t border-ln pt-2.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setBusy(true);
+        setError(null);
+        addDay({ curriculumId: curriculumId as Id<"curricula">, topic })
+          .then((dayId) => {
+            setTopic("");
+            onAdded(dayId);
+          })
+          .catch((err: unknown) => setError(errorMessage(err)))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <label htmlFor="new-day-topic" className="text-[13px] font-bold">
+        Add a day
+      </label>
+      <div className="flex gap-1.5">
+        <TextInput
+          id="new-day-topic"
+          placeholder="Topic, e.g. Final project"
+          value={topic}
+          maxLength={80}
+          onChange={(e) => setTopic(e.target.value)}
+          className="h-9 min-w-0 flex-1 text-sm max-md:h-11"
+        />
+        <Button
+          type="submit"
+          size="sm"
+          variant="secondary"
+          className="h-9 bg-bg max-md:h-11"
+          disabled={topic.trim().length === 0}
+          loading={busy}
+          loadingLabel="Adding…"
+        >
+          Add
+        </Button>
+      </div>
+      {error && <FieldError id="new-day-error">{error}</FieldError>}
+    </form>
   );
 }
 
@@ -275,9 +537,6 @@ function DayAssignmentsPanel({ day }: { day: OverviewDay }) {
     >
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <PanelLabel>DAY {day.order} · ASSIGNMENTS</PanelLabel>
-        <ButtonLink href="/admin/assignments" size="sm" variant="secondary" className="h-[30px] rounded-lg bg-bg max-md:h-11">
-          + New assignment
-        </ButtonLink>
       </div>
       {day.assignments.length === 0 && (
         <span className="text-sm text-ink3">No assignments on this day yet.</span>
@@ -286,19 +545,16 @@ function DayAssignmentsPanel({ day }: { day: OverviewDay }) {
         <Link
           key={a._id}
           href={`/admin/assignments/${a._id}`}
-          className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 rounded-xl bg-bg px-3 py-[9px] text-sm text-ink no-underline hover:bg-sf2 md:grid-cols-[minmax(0,1fr)_88px_80px]"
+          className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 rounded-xl bg-bg px-3 py-[9px] text-sm text-ink no-underline hover:bg-sf2 md:grid-cols-[minmax(0,1fr)_88px_auto]"
         >
           <b className="truncate font-bold">{a.title}</b>
           <span className="text-ink3 max-md:order-last max-md:col-span-2 max-md:text-[13px]">
             {a.type === "guided" ? "guided" : "open-ended"}
           </span>
-          {a.status === "published" ? (
-            <Pill tone="mint" className="px-2.5 font-semibold">Published</Pill>
-          ) : (
-            <Pill tone="amber" className="px-2.5 font-semibold">Draft</Pill>
-          )}
+          <AssignmentStatusPill assignment={a} />
         </Link>
       ))}
+      <NewAssignmentForm key={day._id} dayId={day._id} dayLabel={`Day ${day.order}`} buttonClassName="self-start" />
       <span className="mt-1 text-xs text-ink3">Drafts stay hidden from students until published.</span>
     </section>
   );

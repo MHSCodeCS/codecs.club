@@ -17,6 +17,8 @@ export type TrackDay = {
   order: number;
   topic: string;
   lessonAt: number | null;
+  /** The server decides (D04): open from the lesson date, or with earlier work on the day. */
+  open: boolean;
   assignments: AssignmentProgress[];
 };
 
@@ -38,14 +40,27 @@ export function dayState(day: TrackDay, now: number, timeZone: string): DayState
   return { kind: "open", turnedIn, total };
 }
 
-/** Today's day, else the most recent past day, else the first day. */
+/**
+ * Today's day, else the most recent past day, else the first open day. Days
+ * that aren't open yet (D04) are never the focus; null when none is open.
+ */
 export function focusDay(days: TrackDay[], now: number, timeZone: string): TrackDay | null {
-  const today = days.find((d) => d.lessonAt !== null && isSameDay(d.lessonAt, now, timeZone));
+  const open = days.filter((d) => d.open);
+  const today = open.find((d) => d.lessonAt !== null && isSameDay(d.lessonAt, now, timeZone));
   if (today) return today;
-  const past = days
+  const past = open
     .filter((d) => d.lessonAt !== null && d.lessonAt <= now)
     .sort((a, b) => b.lessonAt! - a.lessonAt!);
-  return past[0] ?? days[0] ?? null;
+  return past[0] ?? open[0] ?? null;
+}
+
+/** The next day that isn't open yet, by lesson date (for "Day 1 opens Thu Sep 17"). */
+export function nextOpening(days: TrackDay[]): TrackDay | null {
+  return (
+    days
+      .filter((d) => !d.open && d.lessonAt !== null)
+      .sort((a, b) => a.lessonAt! - b.lessonAt!)[0] ?? null
+  );
 }
 
 /** Assignment-level status text and tone. */

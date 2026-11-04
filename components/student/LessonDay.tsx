@@ -29,6 +29,37 @@ export function LessonDay({ dayId }: { dayId: string }) {
   const { day, timeZone } = data;
   const isToday = day.lessonAt !== null && isSameDay(day.lessonAt, now, timeZone);
 
+  if (!day.open) {
+    // D04: the day shows up on the track but opens on its lesson date.
+    return (
+      <main className="flex flex-col px-6 pt-2.5 pb-10 lg:px-10">
+        <nav aria-label="Breadcrumb" className="flex gap-2 text-sm text-ink3">
+          <Link href="/learn" className="font-semibold text-ink2 no-underline">
+            {data.curriculumName}
+          </Link>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">Day {day.order}</span>
+        </nav>
+        <h1 className="m-0 mt-1 text-[clamp(36px,3.8vw,52px)] leading-[1.04] font-extrabold tracking-[-.035em]">
+          Day {day.order}: {day.topic}
+        </h1>
+        <EmptyState
+          title={
+            day.lessonAt !== null
+              ? `Opens ${formatWeekdayDate(day.lessonAt, timeZone)}`
+              : "Not scheduled yet"
+          }
+          className="mt-5 max-w-xl"
+        >
+          {day.lessonAt !== null
+            ? "You can open this lesson and its assignments on the day of the lesson."
+            : "This lesson doesn’t have a date yet. It opens on its lesson day."}{" "}
+          <Link href="/learn">Back to your learning home</Link>
+        </EmptyState>
+      </main>
+    );
+  }
+
   return (
     <main className="flex flex-col pb-10">
       <div className="px-6 pt-2.5 lg:px-10">

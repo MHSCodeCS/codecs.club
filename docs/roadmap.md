@@ -14,7 +14,7 @@ The visual reference is the Claude Design project **CodeCS Basic v2**, saved at 
 | Backend | Full Convex schema (`convex/schema.ts`), role checks (`convex/lib/access.ts`), login-code allocation, time-zone helpers, admin change history, seed of the design's sample school |
 | Sign-in | Convex Auth: student login code (`ConvexCredentials`, rate-limited) and admin username/password (`Password`, sign-up refused; accounts created with `admins:createAdmin`) |
 | Live screens | Learning home, Lesson day, Admin Students (roster, attendance, group/curriculum/login-code changes), Admin Curriculum (timeline, day content, lesson dates), Settings (read-only), History |
-| Preview screens | My work, Assignments editor, Assistance, Review render sample data from `lib/fixtures.ts` behind a visible “Preview” banner; nothing on them is saved (the Workspace went live in Phase 3, Review in Phase 6) |
+| Preview screens | My work, Assignments editor, Assistance, Review render sample data from `lib/fixtures.ts` behind a visible “Preview” banner; nothing on them is saved (the Workspace went live in Phase 3, Review in Phase 6, Assignments in Phase 7) |
 | Tests | `npm test`: login codes, sign-in round trips, student/admin access refusals, reassignment history, lesson time zones, partial rule |
 
 ## Phase 3 — Editor and persistence (built)
@@ -85,6 +85,25 @@ Product corrections from the club (decisions D13–D17), applied across code, se
 | Schema | Removed fields kept optional and marked deprecated so stored documents validate: `lessonSchedules.turnInClosesAt`, `settings.turnInDays`, `settings.closeTime`, `students.seatIndex`. `seed:applyCorrections` updates an older dev deployment in place (see [deployment](deployment.md#updating-a-deployment-seeded-before-october-28-2026)) |
 | Tests | Turn-in accepted months after the lesson and on unscheduled days; admin first names and title refusal; the seed has 6 days and no seats; `applyCorrections` trims an older 8-day seed without losing work and is idempotent |
 
+## Phase 7 — Admin content (built)
+
+Built on October 28, 2026 after the user settled D04 and D08.
+
+| Area | What exists |
+| --- | --- |
+| Assignments list | `/admin/assignments` is live: the group's curriculum (picker for others) by day, each assignment's type and Draft / Published / “Published · edits” state, and “+ New assignment” (title and Guided/Open-ended) on every day, which creates a draft and opens it |
+| Editor | `/admin/assignments/[assignmentId]` is live (design 4h): the day's assignments with ↑/↓ to reorder and a new-assignment form; type, title, summary, instructions with a “Students see” preview, optional expected output; starter files for guided work (tabs, add, rename, delete, edited in the code editor); parts (name, begins / contains in order / ends with / equals, expected text, add/remove), the partial rule with the live “Reachable” check, the infinite-loop check and the check input. Open-ended work shows no checks and starts from a blank `main.py` |
+| Drafts and publishing | Save draft keeps the editor's changes in the current revision; a published revision is never edited, so the first save after publishing starts a new one. Publish makes it the revision students see (task version 1, 2, 3, …); the header shows Draft / Unpublished / “Published · task vN” with the draft's save time and “Unsaved changes”. Unpublish hides it from lesson days while students who started keep their workspace, checks and turn-ins. Remove deletes a draft no student has opened, with its revisions. A save over someone else's newer save is refused and the editor offers to reload theirs; leaving with unsaved changes asks first |
+| Task versions (D08) | Each turn-in records the published revision (`submissions.revisionId`). Earlier checks and turn-ins keep their revision and are labeled: “older task version” on the student's check, “for an older version of the task” on the turn-in card, and in Review “Older task version. Turned in for task v1; the task is now v2”, with the check and expected output it was judged with. New checks use the new rules; students' files are never touched; new starter files only reach workspaces created later; nothing is re-evaluated |
+| Lesson days open on their date (D04) | From the start of the lesson date in Pacific time. Until then the student track shows the day as “Upcoming · opens Thu Oct 22” without a link, the lesson page says when it opens, and the learning home focuses on open days only. Unscheduled days aren't open. A student with a workspace on a day keeps the whole day open if its date moves later or is cleared (D13). Enforced in `student.home`, `student.day`, `workspaces.get` and `workspaces.open` (`convex/lib/dayAccess.ts`); checks and turn-ins need an existing workspace. Queries read today's school date from `schoolClock`, which a 10-minute cron (`convex/crons.ts`) moves forward after midnight, so open pages update without reading the clock in a query; mutations use the server clock |
+| Cover images | The Curriculum day panel uploads a cover to Convex file storage (upload URL, then `setCover`): PNG, JPEG, WebP or GIF up to 5 MB, checked in the picker and again on the stored file; refused uploads and replaced or removed covers are deleted. Student lesson pages show it. The slides link stays an https URL (now also length-checked) |
+| Curriculum days | Add a day (unscheduled, at the end), move a day earlier/later (days renumber), and remove a day with no assignments and no attendance (its lesson dates and cover go with it). Lesson dates still move only the lesson date (D06) |
+| History | Every write records an `adminChanges` entry: created, draft saved (which fields changed, never the text), published (with version), unpublished, moved, removed; cover added/replaced/removed; day added/moved/removed |
+| Phones (D17) | Both assignment screens and the new Curriculum controls work at 375 px with about 44 px touch targets; the editor stacks the day's assignments, details and evaluation |
+| Schema | Additive only: `assignmentRevisions.title`, `type`, `updatedBy`, `updatedAt`, `version`, `publishedBy`, `publishedAt`; `submissions.revisionId`; `days.by_coverImageId` index; new `schoolClock` table. Seeded revisions read as task version 1 |
+| Fixtures | The Assignments editor fixture is gone from `lib/fixtures.ts` |
+| Tests | `convex-test`: every authoring and curriculum function refuses students and anonymous callers; a new draft stays hidden until published and unpublishing keeps a student's work, check and turn-in; draft size/shape limits and publish completeness; a stale save is refused; reorder and draft removal; publishing an edit keeps v1 unchanged, labels Jordan's old check and Priya's old turn-in (card and Review) while new checks and turn-ins use v2, and only new workspaces get the new starter file; D04 future and unscheduled days refused, opening at midnight Pacific, the cron-driven school clock, and kept access after a date moves later or is cleared; cover type/size refusals delete the file, replace and remove delete the old one, students get the URL; day add/move/remove with assignment and attendance guards |
+
 ## Later phases
 
 Each phase is its own piece of work. Screens move off fixtures as their phase lands; the fixture shapes already match the planned query results.
@@ -96,7 +115,7 @@ Each phase is its own piece of work. Screens move off fixtures as their phase la
 | 4. Python runtime | Built (see above); checked live against the dev deployment on October 15, 2026. Still needs Chromebook/school-network tests | V01–V03 device tests |
 | 5. Guided evaluation | Built (see above); checked live against the dev deployment on October 15, 2026 | — |
 | 6. Turn-in and review | Built (see above); checked live against the dev deployment on October 15–16, 2026 (student and admin) | — |
-| 7. Admin content | Cover image upload (file storage); assignment authoring with revisions, drafts and publishing | D04, D08 |
+| 7. Admin content | Built (see above) | — |
 | 8. Admin students | Roster import with preview; printable login tickets; history for every write | D03 |
 | 9. Assistance | Presence (online/idle/offline); help requests and queue; join/leave notifications (by the admin's first name); collaborative editing with labeled cursors; guidance notes; attributed remote Run | V04, V05 |
 | 10. Hardening and release | Settings editing; authorization audit; accessibility pass; Chromebook and school-network tests; 50-active-student load check; hosting and domain | D02, D12, V02, V09, V10, V12 |

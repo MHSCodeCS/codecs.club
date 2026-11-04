@@ -1,6 +1,6 @@
 # Decisions and Verification Register
 
-[Documentation index](README.md). Updated October 28, 2026. These are unresolved choices and evidence gaps, not proposed additional features. The documentation describes agreed scope; it does not imply implementation readiness.
+[Documentation index](README.md). Updated October 28, 2026 (Phase 7). These are unresolved choices and evidence gaps, not proposed additional features. The documentation describes agreed scope; it does not imply implementation readiness.
 
 ## Resolved
 
@@ -42,14 +42,19 @@ Resolved on October 28, 2026 by the club (the admins who run CodeCS are high sch
 | D16 | The basic program is **6 weeks**, one lesson a week: Python Fundamentals has 6 days, and Functions folded into Day 6 (“Lists and functions”). |
 | D17 | The admin area works on phones (375 px wide) as well as the 1366×768 Chromebook layout, because admins look up assignments on their phones. Breakpoints are in [UI design](ui-design.md#responsive-breakpoints). The student side stays Chromebook-first; the login page also works on a phone. |
 
+Resolved on October 28, 2026 by the user (answers to the two Phase 7 blockers):
+
+| ID | Decision |
+| --- | --- |
+| D04 | A lesson day opens to students on its lesson date: from the start of that date in the school time zone (Pacific), not at the lesson time, so the day is open all of lesson day like the “Today” card. Before then the day shows on the track as “Upcoming · opens Thu Oct 22” but it and its assignments can’t be opened. Days with no date this school year aren’t open. Under D13 (no lockouts), a student who already has work on a day keeps it open even if its date later moves into the future or is cleared. Admins always see every day. Enforced on the server for the lesson day and learning home queries and for opening/creating a workspace; checks and turn-ins need an existing workspace, which only exists on a day the student could open. |
+| D08 | Publishing edits makes a new task version (revision). Earlier checks and turn-ins keep the revision they were judged with and are labeled as an older task version in the student’s check results, on the turn-in card and in Review; new checks use the new rules. Students’ existing files are never touched: a starter-file change only affects workspaces created later. There is no automatic re-evaluation. |
+
 ## Product decisions requiring input
 
 | ID | Decision | Needed before |
 | --- | --- | --- |
 | D02 | Forgotten-password recovery and in-app admin provisioning (interim: the developer creates admins with `npx convex run admins:createAdmin`) | Release |
 | D03 | Spreadsheet columns/formats and stable returning-student match key | Roster import; avoid merging same-name people |
-| D04 | Future lessons available immediately versus admin release | Publication/student day list |
-| D08 | Published edits applied to existing work and any re-evaluation | Versioned assignment publication |
 | D12 | Frontend provider, domain choice, and account ownership | Release |
 
 Do not silently invent approved defaults. Independent implementation work can proceed while the relevant decision remains pending.

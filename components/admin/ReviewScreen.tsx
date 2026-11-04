@@ -537,6 +537,19 @@ function ReviewPanel({
       {selected.check?.runOutcome && runNote[selected.check.runOutcome] && (
         <span className="-mt-1 text-[12.5px] text-ink3">{runNote[selected.check.runOutcome]}</span>
       )}
+      {selected.olderTask && (
+        <span role="note" className="rounded-xl bg-amb-s px-3 py-2 text-[12.5px] text-amb-i">
+          <b className="font-bold">Older task version.</b> Turned in for{" "}
+          {selected.taskVersion !== null ? `task v${selected.taskVersion}` : "an earlier version of the task"}
+          {selected.currentTaskVersion !== null && `; the task is now v${selected.currentTaskVersion}`}. Its
+          check and expected output are the ones it was judged with.
+        </span>
+      )}
+      {selected.check && selected.taskVersion !== null && selected.check.taskVersion !== selected.taskVersion && (
+        <span className="-mt-1 text-[12.5px] text-ink3">
+          This check used task v{selected.check.taskVersion}.
+        </span>
+      )}
 
       {others.map((a) => (
         <button

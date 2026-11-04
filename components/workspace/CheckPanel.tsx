@@ -50,6 +50,7 @@ export function CheckPanel({
         {latest && (
           <span className="truncate text-[13px] text-ink3">
             for v{latest.versionNumber} · {formatRelative(latest.ranAt, now, timeZone)}
+            {!latest.currentTask && " · older task version"}
           </span>
         )}
         {guided && (
@@ -82,7 +83,7 @@ export function CheckPanel({
             {stale && (
               <p role="status" className="m-0 rounded-lg bg-amb-s px-2.5 py-1.5 text-[12.5px] text-amb-i">
                 {!latest.currentTask
-                  ? "The task changed after this check. Run it again for an up-to-date result."
+                  ? "This check used an older version of the task, and its result stays as it was. Run it again to check against the task as it is now."
                   : "You’ve changed your code since this check. Run it again to update."}
               </p>
             )}

@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
-import { AssignmentEditor } from "@/components/admin/AssignmentEditor";
+import { Suspense } from "react";
+import { AssignmentEditorRoute } from "@/components/admin/AssignmentEditorRoute";
+import { LoadingState } from "@/components/ui/States";
 
 export const metadata: Metadata = { title: "Assignment" };
 
-// Phase 7 loads the assignment by id; until then the editor shows sample data.
-export default function AssignmentEditorPage() {
-  return <AssignmentEditor />;
+export default function AssignmentEditorPage({
+  params,
+}: PageProps<"/admin/assignments/[assignmentId]">) {
+  return (
+    <Suspense fallback={<LoadingState label="Loading the assignment…" />}>
+      <AssignmentEditorRoute params={params} />
+    </Suspense>
+  );
 }

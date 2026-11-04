@@ -84,7 +84,8 @@ export function Workspace({ assignmentId }: { assignmentId: string }) {
     return (
       <main className="mx-auto max-w-xl p-6">
         <EmptyState title="This assignment isn’t available">
-          It may not be published yet, or it belongs to another curriculum.{" "}
+          It may not be published yet, its lesson day may not have started, or it belongs to
+          another curriculum.{" "}
           <Link href="/learn">Back to your learning home</Link>
         </EmptyState>
       </main>

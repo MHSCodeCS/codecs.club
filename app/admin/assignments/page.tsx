@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { AssignmentEditor } from "@/components/admin/AssignmentEditor";
+import { AssignmentsScreen } from "@/components/admin/AssignmentsScreen";
 
 export const metadata: Metadata = { title: "Assignments" };
 
 export default function AssignmentsPage() {
-  return <AssignmentEditor />;
+  return <AssignmentsScreen />;
 }

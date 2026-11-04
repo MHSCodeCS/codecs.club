@@ -22,8 +22,9 @@ After login, the student sees their current basic or advanced group and assigned
 - Show curriculum and group context clearly.
 - Present days in their learning order with topic titles and scheduled dates when assigned.
 - Do not invent dates for unscheduled lessons.
+- A day opens on its lesson date (D04). Future days show on the track as “Upcoming · opens Thu Oct 22” and can't be opened; unscheduled days show “Not scheduled” and can't be opened either. Opening one directly says when it opens. A day the student already has work on stays open even if its date moves later or is cleared (D13). The learning home focuses on today's or the latest open day, or says when the first day opens.
 - Show assignments under their day and make progress readable without opening every assignment.
-- Keep historical personal work accessible when the current curriculum changes or the student is no longer learning.
+- Keep historical personal work accessible when the current curriculum changes or the student is no longer learning. An assignment an admin unpublishes disappears from the lesson day, but a student who started it keeps their work.
 
 ### 3. Open a lesson day
 
@@ -73,6 +74,7 @@ Whitespace differences must not make otherwise matching output incorrect: disreg
 - Warn before navigation that could lose unsaved work.
 - Keep work progress distinct from guided-check outcomes and submission state.
 - Show a checklist of assignment requirements with met/unmet results alongside the overall completion status, so students know what to revise.
+- When an admin publishes a new version of the task (D08), the task panel shows it and new checks use it. An earlier check keeps its result and is labeled “older task version”; the student's files are not changed.
 - Preserve original output formatting in the console; whitespace-insensitive comparison applies to checks, not to how output is displayed.
 - Expose version history with inspect and restore actions; identify the version being restored.
 - Preserve prior work when restoring a version or when an admin edits.
@@ -107,6 +109,7 @@ Turn-in never locks (D13, which supersedes the old 14-day window of D05). Studen
 - Separate an admin's feedback from automated output-check results, and sign it with the admin's first name (“Note from Max”, “Max reviewed this”).
 - Show returned feedback beside a clear edit/resume action and indicate which submitted version was reviewed.
 - Show resubmission as a new submission without erasing the previous review.
+- An attempt turned in before the task's latest version reads “for an older version of the task” on the turn-in card (D08).
 
 ### 8. Return and resume
 

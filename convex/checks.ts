@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { appError } from "./lib/errors";
 import { evaluate } from "./lib/evaluation";
+import { taskVersion } from "./lib/revisions";
 import { sameFiles } from "./lib/workFiles";
 import { checkRunOutcomeValidator, fileValidator, outcomeValidator } from "./schema";
 import { latestVersion, requireOwnWorkspace, snapshot, workingFiles } from "./workspaces";
@@ -26,13 +27,19 @@ const partResultValidator = v.object({
   detail: v.optional(v.string()),
 });
 
-/** The published revision of a guided assignment, or an explanation why not. */
+/**
+ * The published revision of a guided assignment, or an explanation why not.
+ * New checks always use the latest published rules (D08). The caller owns the
+ * workspace, so the day stays open to them (D04 with D13's kept access), and
+ * an assignment unpublished since they started still checks against the
+ * rules they last saw.
+ */
 async function guidedRevision(
   ctx: Pick<QueryCtx, "db">,
   workspace: Doc<"workspaces">,
 ): Promise<Doc<"assignmentRevisions">> {
   const assignment = await ctx.db.get("assignments", workspace.assignmentId);
-  if (assignment === null || assignment.status !== "published" || !assignment.publishedRevisionId) {
+  if (assignment === null || !assignment.publishedRevisionId) {
     throw appError("NOT_FOUND", "This assignment isn’t available.");
   }
   if (assignment.type !== "guided") {
@@ -144,7 +151,8 @@ export const record = mutation({
 
 /**
  * The workspace's latest check, with whether it still describes the current
- * files (`fresh`) and the current task (`currentTask`).
+ * files (`fresh`) and the current task (`currentTask`). A check made with an
+ * earlier task version keeps its result and rules; it is only labeled (D08).
  */
 export const latest = query({
   args: { workspaceId: v.id("workspaces") },
@@ -160,6 +168,8 @@ export const latest = query({
       runOutcome: v.union(checkRunOutcomeValidator, v.null()),
       fresh: v.boolean(),
       currentTask: v.boolean(),
+      /** The task version the check used. */
+      taskVersion: v.number(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -184,6 +194,7 @@ export const latest = query({
       runOutcome: check.runOutcome ?? null,
       fresh: version !== null && sameFiles(version.files, files),
       currentTask: assignment?.publishedRevisionId === check.revisionId,
+      taskVersion: revision ? taskVersion(revision) : 1,
     };
   },
 });

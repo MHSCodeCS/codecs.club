@@ -5,6 +5,7 @@ import { getSettings, requireAdmin } from "./lib/access";
 import { adminName } from "./lib/adminNames";
 import { recordAdminChange } from "./lib/changes";
 import { appError } from "./lib/errors";
+import { olderTask, taskVersion } from "./lib/revisions";
 import {
   assignmentTypeValidator,
   checkRunOutcomeValidator,
@@ -291,6 +292,12 @@ export const attempt = query({
           reviewerName: v.union(v.string(), v.null()),
           versionNumber: v.number(),
           files: v.array(fileValidator),
+          /** Task version it was turned in under; null for early attempts made before that was recorded. */
+          taskVersion: v.union(v.number(), v.null()),
+          /** Task version students see now. */
+          currentTaskVersion: v.union(v.number(), v.null()),
+          /** Turned in under an earlier task version (D08): its check keeps the old rules. */
+          olderTask: v.boolean(),
           expectedOutput: v.union(v.string(), v.null()),
           expectedParts: v.array(
             v.object({ name: v.string(), kind: partKindValidator, expected: v.string() }),
@@ -305,6 +312,8 @@ export const attempt = query({
               output: v.union(v.string(), v.null()),
               outputTruncated: v.boolean(),
               ranAt: v.number(),
+              /** Task version whose rules the check used. */
+              taskVersion: v.number(),
             }),
           ),
           feedback: v.union(v.string(), v.null()),
@@ -357,9 +366,18 @@ export const attempt = query({
       const check = chosen.checkResultId
         ? await ctx.db.get("checkResults", chosen.checkResultId)
         : null;
-      // Expected output comes from the rules the check used, else the published task.
-      const revisionId = check?.revisionId ?? assignment.publishedRevisionId;
+      const published = assignment.publishedRevisionId
+        ? await ctx.db.get("assignmentRevisions", assignment.publishedRevisionId)
+        : null;
+      // The task it was turned in under (D08); early attempts only know their check's.
+      const turnedInUnderId = chosen.revisionId ?? check?.revisionId ?? null;
+      const turnedInUnder = turnedInUnderId
+        ? await ctx.db.get("assignmentRevisions", turnedInUnderId)
+        : null;
+      // Expected output comes from the rules the check used, else the task it was turned in under.
+      const revisionId = check?.revisionId ?? turnedInUnderId ?? assignment.publishedRevisionId;
       const revision = revisionId ? await ctx.db.get("assignmentRevisions", revisionId) : null;
+      const older = olderTask(published, turnedInUnderId, chosen.submittedAt);
       const rows = writing.get(chosen._id) ?? [];
       selected = {
         _id: chosen._id,
@@ -371,6 +389,13 @@ export const attempt = query({
         reviewerName: chosen.reviewedBy ? await adminName(ctx, chosen.reviewedBy) : null,
         versionNumber: version?.number ?? 0,
         files: version?.files ?? [],
+        taskVersion: turnedInUnder
+          ? taskVersion(turnedInUnder)
+          : !older && published
+            ? taskVersion(published)
+            : null,
+        currentTaskVersion: published ? taskVersion(published) : null,
+        olderTask: older,
         expectedOutput: revision?.expectedOutput ?? null,
         expectedParts: revision?.parts ?? [],
         check: check && {
@@ -381,6 +406,7 @@ export const attempt = query({
           output: check.output ?? null,
           outputTruncated: check.outputTruncated ?? false,
           ranAt: check.ranAt,
+          taskVersion: revision ? taskVersion(revision) : 1,
         },
         feedback: rows.find((r) => r.visibility === "student")?.body ?? null,
         privateNote: rows.find((r) => r.visibility === "private")?.body ?? null,

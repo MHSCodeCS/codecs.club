@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Pill } from "@/components/ui/Pill";
 import { cn } from "@/lib/cn";
-import { formatShortDate } from "@/lib/format";
+import { formatShortDate, formatWeekdayDate } from "@/lib/format";
 import { dayState, type DayState, type TrackDay } from "@/lib/progress";
 
 /** The curriculum as a horizontal track of days, in learning order. */
@@ -70,45 +70,58 @@ function DayCard({ day, state, timeZone }: { day: TrackDay; state: DayState; tim
       );
       break;
     case "upcoming":
-      footer = <span className="text-[13px] font-semibold text-ink3">Upcoming</span>;
+      footer = (
+        <span className="text-[13px] font-semibold text-ink3">
+          {day.open ? "Upcoming" : `Upcoming · opens ${formatWeekdayDate(day.lessonAt!, timeZone)}`}
+        </span>
+      );
       break;
     case "unscheduled":
       footer = <span className="text-[13px] font-semibold text-ink3">Not scheduled</span>;
       break;
   }
 
-  return (
-    <li aria-current={today ? "step" : undefined} className="min-w-0">
-      <Link
-        href={`/learn/days/${day._id}`}
+  const cardClass = cn(
+    "flex h-full min-h-[124px] flex-col gap-1 rounded-[18px] px-3.5 pt-3 pb-3.5 text-ink no-underline",
+    surface,
+    today && "text-on-mint hover:text-on-mint",
+  );
+  const content = (
+    <>
+      <span
         className={cn(
-          "flex h-full min-h-[124px] flex-col gap-1 rounded-[18px] px-3.5 pt-3 pb-3.5 text-ink no-underline transition-shadow hover:shadow-card",
-          surface,
-          today && "text-on-mint hover:text-on-mint",
+          "flex items-center justify-between text-xs",
+          today ? "font-bold" : "font-semibold text-ink3",
         )}
       >
-        <span
-          className={cn(
-            "flex items-center justify-between text-xs",
-            today ? "font-bold" : "font-semibold text-ink3",
-          )}
-        >
-          Day {day.order}
-          {dateLabel}
-          {today && <Pill tone="ink">TODAY</Pill>}
-        </span>
-        <b
-          className={cn(
-            today
-              ? "text-[30px] leading-[1.05] font-extrabold tracking-[-.035em]"
-              : "text-base leading-[1.25] font-bold",
-            (state.kind === "upcoming" || state.kind === "unscheduled") && "text-ink2",
-          )}
-        >
-          {day.topic}
-        </b>
-        <span className="mt-auto">{footer}</span>
-      </Link>
+        Day {day.order}
+        {dateLabel}
+        {today && <Pill tone="ink">TODAY</Pill>}
+      </span>
+      <b
+        className={cn(
+          today
+            ? "text-[30px] leading-[1.05] font-extrabold tracking-[-.035em]"
+            : "text-base leading-[1.25] font-bold",
+          (state.kind === "upcoming" || state.kind === "unscheduled") && "text-ink2",
+        )}
+      >
+        {day.topic}
+      </b>
+      <span className="mt-auto">{footer}</span>
+    </>
+  );
+
+  // A day opens on its lesson date (D04); until then it's shown but can't be opened.
+  return (
+    <li aria-current={today ? "step" : undefined} className="min-w-0">
+      {day.open ? (
+        <Link href={`/learn/days/${day._id}`} className={cn(cardClass, "transition-shadow hover:shadow-card")}>
+          {content}
+        </Link>
+      ) : (
+        <div className={cardClass}>{content}</div>
+      )}
     </li>
   );
 }
