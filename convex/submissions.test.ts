@@ -348,3 +348,27 @@ describe("review", () => {
     expect((await t.run((ctx) => ctx.db.get("submissions", submission._id)))?.status).toBe("unreviewed");
   });
 });
+
+test("review decisions and comments reach the student and reset on a new attempt", async () => {
+  const { admin, jordanSession, jordan, workspaceOf, countdown } = await setup();
+  const workspace = await workspaceOf(jordan._id);
+  const submitted = await jordanSession.mutation(api.submissions.turnIn, { workspaceId: workspace._id, idempotencyKey: "review-decisions" });
+  const detail = await admin.query(api.review.attempt, { assignmentId: countdown._id, studentId: jordan._id, attempt: submitted.attempt });
+  const submissionId = detail!.selected!._id;
+  await expect(jordanSession.mutation(api.review.markReviewed, { submissionId, reviewDecision: "complete", feedback: "", privateNote: "" })).rejects.toThrow();
+  await admin.mutation(api.review.markReviewed, { submissionId, reviewDecision: "needsWork", feedback: "Please fix the loop", privateNote: "Teacher only" });
+  const returned = await jordanSession.query(api.submissions.forWorkspace, { workspaceId: workspace._id });
+  expect(returned.latest?.reviewDecision).toBe("needsWork");
+  expect(returned.feedback?.body).toBe("Please fix the loop");
+  const list = await jordanSession.query(api.myWork.list, { paginationOpts: { numItems: 20, cursor: null } });
+  expect(list.page.find(w => w._id === workspace._id)?.latestAttempt?.reviewDecision).toBe("needsWork");
+  const history = await jordanSession.query(api.myWork.attempts, { workspaceId: workspace._id, paginationOpts: { numItems: 10, cursor: null } });
+  expect(history.page[0].feedback.map(f => f.body)).toEqual(["Please fix the loop"]);
+  await admin.mutation(api.review.markReviewed, { submissionId, reviewDecision: "complete", feedback: "Looks good", privateNote: "Teacher only" });
+  expect((await jordanSession.query(api.submissions.forWorkspace, { workspaceId: workspace._id })).latest?.reviewDecision).toBe("complete");
+  await jordanSession.mutation(api.submissions.turnIn, { workspaceId: workspace._id, idempotencyKey: "review-decisions-again" });
+  const again = await jordanSession.query(api.submissions.forWorkspace, { workspaceId: workspace._id });
+  expect(again.latest?.attempt).toBe(submitted.attempt + 1);
+  expect(again.latest?.status).toBe("unreviewed");
+  expect(again.latest?.reviewDecision).toBeUndefined();
+});

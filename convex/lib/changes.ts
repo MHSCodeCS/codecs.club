@@ -16,7 +16,9 @@ export async function recordAdminChange(
     after?: Record<string, unknown>;
   },
 ): Promise<void> {
+  const actor = await ctx.db.query("admins").withIndex("by_userId", q => q.eq("userId", change.actorId)).unique();
   await ctx.db.insert("adminChanges", {
+    actorName: actor?.displayName,
     actorId: change.actorId,
     at: Date.now(),
     table: change.table,

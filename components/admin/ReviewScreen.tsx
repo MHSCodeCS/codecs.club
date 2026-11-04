@@ -59,7 +59,6 @@ const partKind = {
 const selectClass =
   "h-10 max-w-[320px] rounded-[10px] border-[1.5px] border-bd bg-bg px-3 text-[15px] font-bold text-ink max-md:h-11 max-md:w-full max-md:max-w-none";
 
-const isWaiting = (row: QueueRow) => row.state === "newAttempt" || row.state === "unreviewed";
 
 type Choice = Options["days"][number]["assignments"][number] & { day: Options["days"][number] };
 
@@ -72,7 +71,7 @@ function defaultChoice(days: Options["days"], now: number): Choice | null {
 }
 
 /** 4j. Submitted snapshots with expected vs actual output, checks and optional feedback. */
-export function ReviewScreen() {
+export function ReviewScreen({ assignmentId, studentId }: { assignmentId?: string; studentId?: string }) {
   const { group } = useGroup();
   const now = useNow();
   const options = useQuery(api.review.options, { group });
@@ -84,6 +83,7 @@ export function ReviewScreen() {
   );
   const current =
     choices.find((c) => picked?.group === group && c._id === picked.assignmentId) ??
+    choices.find(c => c._id === assignmentId) ??
     (options ? defaultChoice(options.days, now) : null);
   const queue = useQuery(api.review.queue, current ? { assignmentId: current._id } : "skip");
 
@@ -144,7 +144,7 @@ export function ReviewScreen() {
       {current === null ? (
         <EmptyState title="Nothing to review yet" className="mx-4 mt-6 md:mx-7">
           {options.curriculum
-            ? `${options.curriculum.name} has no published assignments.`
+            ? "This class has no published assignments."
             : "This group has no curriculum yet."}
         </EmptyState>
       ) : queue === undefined ? (
@@ -158,19 +158,19 @@ export function ReviewScreen() {
           Nobody in {options.curriculum?.name ?? "this curriculum"} has this assignment yet.
         </EmptyState>
       ) : (
-        <ReviewBody key={current._id} queue={queue} timeZone={options.timeZone} now={now} />
+        <ReviewBody key={`${current._id}:${studentId ?? ""}`} initialStudentId={studentId} queue={queue} timeZone={options.timeZone} now={now} />
       )}
     </main>
   );
 }
 
-function ReviewBody({ queue, timeZone, now }: { queue: Queue; timeZone: string; now: number }) {
+function ReviewBody({ queue, timeZone, now, initialStudentId }: { queue: Queue; timeZone: string; now: number; initialStudentId?: string }) {
   // Starts on the first row and stays on that student when reviewing re-sorts the queue.
   const [selection, setSelection] = useState<{ studentId: Id<"students">; attempt: number | null }>(
-    () => ({ studentId: queue.rows[0]!.studentId, attempt: null }),
+    () => ({ studentId: (queue.rows.find(row => row.studentId === initialStudentId) ?? queue.rows[0]!).studentId, attempt: null }),
   );
   // Phones show the queue alone; picking a student opens their attempt as a sheet.
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(!!initialStudentId);
   const rows = queue.rows;
   const row = rows.find((r) => r.studentId === selection.studentId) ?? rows[0]!;
   const detail = useQuery(api.review.attempt, {
@@ -179,13 +179,10 @@ function ReviewBody({ queue, timeZone, now }: { queue: Queue; timeZone: string; 
     attempt: selection.studentId === row.studentId ? (selection.attempt ?? undefined) : undefined,
   });
 
-  const index = rows.indexOf(row);
-  const next = [...rows.slice(index + 1), ...rows.slice(0, index)].find(isWaiting) ?? null;
   const select = (studentId: Id<"students">, attempt: number | null = null) => {
     setSelection({ studentId, attempt });
     setDetailOpen(true);
   };
-  const goNext = next ? () => select(next.studentId) : null;
 
   const rowSummary = (r: QueueRow) => {
     if (r.attempt === null || r.submittedAt === null) {
@@ -207,7 +204,9 @@ function ReviewBody({ queue, timeZone, now }: { queue: Queue; timeZone: string; 
       <nav aria-label="Submissions" className="flex flex-col gap-0.5 self-start rounded-[20px] bg-sf p-2">
         {rows.map((r) => {
           const current = r.studentId === row.studentId;
-          const label = stateLabel[r.state];
+          const label = r.state === "reviewed" && r.reviewDecision === "needsWork"
+            ? { text: "Incomplete", tone: "coral" as const }
+            : stateLabel[r.state];
           return (
             <button
               key={r.studentId}
@@ -231,40 +230,34 @@ function ReviewBody({ queue, timeZone, now }: { queue: Queue; timeZone: string; 
         })}
       </nav>
 
-      <PhoneSheet
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        title={`${row.name} · ${queue.assignment.title}`}
-        backLabel="Queue"
-      >
-        {detail === undefined ? (
-          <div className="xl:col-span-2">
-            <LoadingState label="Loading attempt…" />
-          </div>
-        ) : detail === null ? (
-          <EmptyState title="This student wasn’t found" className="xl:col-span-2">
-            Pick someone else from the list.
-          </EmptyState>
-        ) : (
-          <>
-            <Snapshot
-              key={`${detail.student._id}:${detail.selected?._id ?? "none"}`}
-              detail={detail}
-              queue={queue}
-              timeZone={timeZone}
-              now={now}
-              onAttempt={(attempt) => select(row.studentId, attempt)}
-            />
-            <ReviewPanel
-              key={`${detail.selected?._id ?? detail.student._id}:${detail.selected?.status}:${detail.selected?.feedback}:${detail.selected?.privateNote}`}
-              detail={detail}
-              guided={queue.assignment.type === "guided"}
-              timeZone={timeZone}
-              onAttempt={(attempt) => select(row.studentId, attempt)}
-              onNext={goNext}
-            />
-          </>
-        )}
+      <PhoneSheet open={detailOpen} onClose={() => setDetailOpen(false)} title={row.name} backLabel="Review queue">
+      {detail === undefined ? (
+        <div className="xl:col-span-2">
+          <LoadingState label="Loading attempt…" />
+        </div>
+      ) : detail === null ? (
+        <EmptyState title="This student wasn’t found" className="xl:col-span-2">
+          Pick someone else from the list.
+        </EmptyState>
+      ) : (
+        <>
+          <Snapshot
+            key={`${detail.student._id}:${detail.selected?._id ?? "none"}`}
+            detail={detail}
+            queue={queue}
+            now={now}
+            timeZone={timeZone}
+            onAttempt={(attempt) => select(row.studentId, attempt)}
+          />
+          <ReviewPanel
+            key={`${detail.selected?._id ?? detail.student._id}:${detail.selected?.status}:${detail.selected?.feedback}:${detail.selected?.privateNote}`}
+            detail={detail}
+            guided={queue.assignment.type === "guided"}
+            timeZone={timeZone}
+            onAttempt={(attempt) => select(row.studentId, attempt)}
+          />
+        </>
+      )}
       </PhoneSheet>
     </div>
   );
@@ -290,7 +283,7 @@ function Snapshot({
   );
   const file = files.find((f) => f.name === shown) ?? files[0] ?? null;
   const liveLink = (
-    <Link href="/admin/assistance" className="ml-auto font-bold whitespace-nowrap text-mint-i no-underline max-md:py-2.5">
+    <Link href={detail.workspaceId ? `/admin/assistance?workspace=${detail.workspaceId}` : "/admin/assistance"} className="ml-auto font-bold whitespace-nowrap text-mint-i no-underline">
       Open live working copy →
     </Link>
   );
@@ -451,13 +444,11 @@ function ReviewPanel({
   guided,
   timeZone,
   onAttempt,
-  onNext,
 }: {
   detail: Detail;
   guided: boolean;
   timeZone: string;
   onAttempt: (attempt: number) => void;
-  onNext: (() => void) | null;
 }) {
   const { selected, student } = detail;
   const markReviewed = useMutation(api.review.markReviewed);
@@ -469,23 +460,10 @@ function ReviewPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nextButton = (
-    <Button
-      variant="secondary"
-      className="h-[46px] rounded-xl bg-bg text-[15px]"
-      disabled={onNext === null}
-      title={onNext === null ? "No one else is waiting for review." : undefined}
-      onClick={() => onNext?.()}
-    >
-      Next →
-    </Button>
-  );
-
   if (selected === null) {
     return (
       <aside aria-label="Check and review" className="flex flex-col gap-3 self-start rounded-[24px] bg-sf px-[18px] py-4">
         <span className="text-sm text-ink2">Nothing to review until {student.firstName} turns this in.</span>
-        <div className="mt-2 flex justify-end">{nextButton}</div>
       </aside>
     );
   }
@@ -497,11 +475,11 @@ function ReviewPanel({
   const others = detail.attempts.filter((a) => a.attempt !== selected.attempt).reverse();
   const newest = detail.attempts[detail.attempts.length - 1];
 
-  const save = async () => {
+  const save = async (decision: "needsWork" | "complete") => {
     setSaving(true);
     setError(null);
     try {
-      await markReviewed({ submissionId: selected._id, feedback: feedbackText, privateNote: noteText });
+      await markReviewed({ submissionId: selected._id, feedback: feedbackText, privateNote: noteText, reviewDecision: decision });
     } catch (e) {
       setError(errorMessage(e, "Couldn’t save the review. Try again."));
     } finally {
@@ -578,7 +556,7 @@ function ReviewPanel({
         <>
           {reviewed && (
             <span className="text-[13px] font-semibold text-vio-i">
-              ✓ Reviewed{selected.reviewerName ? ` by ${selected.reviewerName}` : ""}
+              {selected.reviewDecision === "needsWork" ? "Needs Work" : selected.reviewDecision === "complete" ? "✓ Complete" : "✓ Reviewed"}{selected.reviewerName ? ` by ${selected.reviewerName}` : ""}
               {selected.reviewedAt ? ` · ${formatShortDate(selected.reviewedAt, timeZone)}` : ""}. {student.firstName}{" "}
               can see it.
             </span>
@@ -658,20 +636,31 @@ function ReviewPanel({
         </>
       )}
 
-      <div className="mt-2 flex gap-2">
+      <div className="mt-2 flex flex-wrap gap-2">
         {selected.latest && (
+          <>
           <Button
             variant="primary"
             className="h-[46px] flex-1 rounded-xl text-[15px]"
             loading={saving}
             loadingLabel="Saving…"
-            disabled={reviewed && !changed}
-            onClick={() => void save()}
+            disabled={saving || (reviewed && selected.reviewDecision === "complete" && !changed)}
+            onClick={() => void save("complete")}
           >
-            {reviewed ? "Save changes" : "Mark reviewed"}
+            Mark complete
           </Button>
+          <Button
+            variant="danger"
+            className="h-[46px] flex-1 rounded-xl text-[15px]"
+            loading={saving}
+            loadingLabel="Saving…"
+            disabled={saving || (reviewed && selected.reviewDecision === "needsWork" && !changed)}
+            onClick={() => { setFeedbackOpen(true); void save("needsWork"); }}
+          >
+            Mark Incomplete
+          </Button>
+          </>
         )}
-        {nextButton}
       </div>
     </aside>
   );

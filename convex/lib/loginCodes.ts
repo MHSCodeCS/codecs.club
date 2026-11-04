@@ -31,6 +31,7 @@ export async function allocateLoginCode(
   ctx: Pick<QueryCtx, "db">,
   firstName: string,
   lastName: string,
+  reserved: ReadonlySet<string> = new Set(),
 ): Promise<string> {
   const base = baseLoginCode(firstName, lastName);
   for (let suffix = 0; suffix < 1000; suffix++) {
@@ -39,7 +40,7 @@ export async function allocateLoginCode(
       .query("students")
       .withIndex("by_loginCode", (q) => q.eq("loginCode", candidate))
       .first();
-    if (taken === null) return candidate;
+    if (taken === null && !reserved.has(candidate)) return candidate;
   }
   throw new Error(`No free login code for ${base}.`);
 }

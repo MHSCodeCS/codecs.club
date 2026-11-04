@@ -25,11 +25,8 @@ export function LearningHome() {
     <main className="flex flex-col pb-10">
       <div className="flex flex-wrap items-end gap-6 px-6 pt-4 lg:px-10">
         <div>
-          <div className="text-sm font-semibold text-ink3">
-            {home.student.group} · {formatYear(home.year)}
-          </div>
           <h1 className="m-0 mt-1 text-[clamp(40px,4.3vw,58px)] leading-[1.04] font-extrabold tracking-[-.035em]">
-            {home.curriculum.name}
+            Hey, {home.student.firstName}!
           </h1>
         </div>
         {days.length > 0 && (
@@ -42,9 +39,8 @@ export function LearningHome() {
       <section aria-labelledby="track-title" className="px-6 pt-[22px] lg:px-10">
         <div className="mb-3 flex items-baseline gap-3">
           <h2 id="track-title" className="m-0 text-[22px] leading-[1.2] font-bold tracking-[-.02em]">
-            Your track
+            {home.className} · {formatYear(home.year)}
           </h2>
-          <span className="text-sm text-ink3">{days.length} days, in learning order</span>
         </div>
         {days.length === 0 ? (
           <EmptyState title="No days yet">No lessons have been added to this curriculum yet.</EmptyState>

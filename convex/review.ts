@@ -1,3 +1,4 @@
+import { classYear, writableClass } from "./lib/classes";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
@@ -12,7 +13,7 @@ import {
   groupValidator,
   outcomeValidator,
   partKindValidator,
-  submissionStatusValidator,
+  submissionStatusValidator, reviewDecisionValidator,
 } from "./schema";
 import { feedbackRows, scheduleFor } from "./submissions";
 
@@ -95,7 +96,7 @@ export const options = query({
         .withIndex("by_curriculumId_and_order", (q) => q.eq("curriculumId", curriculum._id))
         .take(MAX_DAYS);
       for (const day of dayDocs) {
-        const schedule = await scheduleFor(ctx, day._id, settings.currentYear);
+        const schedule = await scheduleFor(ctx, day._id, await classYear(ctx, args.group));
         const assignmentDocs = await ctx.db
           .query("assignments")
           .withIndex("by_dayId_and_order", (q) => q.eq("dayId", day._id))
@@ -147,6 +148,7 @@ export const queue = query({
           name: v.string(),
           loginCode: v.string(),
           state: queueStateValidator,
+          reviewDecision: v.union(reviewDecisionValidator, v.null()),
           attempt: v.union(v.number(), v.null()),
           submittedAt: v.union(v.number(), v.null()),
           outcome: v.union(outcomeValidator, v.null()),
@@ -217,6 +219,7 @@ export const queue = query({
         name: studentName(student),
         loginCode: student.loginCode,
         state,
+        reviewDecision: latest?.reviewDecision ?? null,
         attempt: latest?.attempt ?? null,
         submittedAt: latest?.submittedAt ?? null,
         outcome: check?.outcome ?? null,
@@ -262,6 +265,7 @@ export const attempt = query({
     v.null(),
     v.object({
       timeZone: v.string(),
+      workspaceId: v.union(v.id("workspaces"), v.null()),
       student: v.object({
         _id: v.id("students"),
         name: v.string(),
@@ -273,7 +277,7 @@ export const attempt = query({
         v.object({
           attempt: v.number(),
           submittedAt: v.number(),
-          status: submissionStatusValidator,
+          status: submissionStatusValidator, reviewDecision: v.optional(reviewDecisionValidator),
           reviewedAt: v.union(v.number(), v.null()),
           hasFeedback: v.boolean(),
           hasNote: v.boolean(),
@@ -285,7 +289,7 @@ export const attempt = query({
           _id: v.id("submissions"),
           attempt: v.number(),
           latest: v.boolean(),
-          status: submissionStatusValidator,
+          status: submissionStatusValidator, reviewDecision: v.optional(reviewDecisionValidator),
           submittedAt: v.number(),
           reviewedAt: v.union(v.number(), v.null()),
           reviewerName: v.union(v.string(), v.null()),
@@ -340,7 +344,7 @@ export const attempt = query({
       attempts.push({
         attempt: s.attempt,
         submittedAt: s.submittedAt,
-        status: s.status,
+        status: s.status, reviewDecision: s.reviewDecision,
         reviewedAt: s.reviewedAt ?? null,
         hasFeedback: rows.some((r) => r.visibility === "student"),
         hasNote: rows.some((r) => r.visibility === "private"),
@@ -365,7 +369,7 @@ export const attempt = query({
         _id: chosen._id,
         attempt: chosen.attempt,
         latest: chosen._id === submissions[0]?._id,
-        status: chosen.status,
+        status: chosen.status, reviewDecision: chosen.reviewDecision,
         submittedAt: chosen.submittedAt,
         reviewedAt: chosen.reviewedAt ?? null,
         reviewerName: chosen.reviewedBy ? await adminName(ctx, chosen.reviewedBy) : null,
@@ -389,6 +393,7 @@ export const attempt = query({
 
     return {
       timeZone: settings.timeZone,
+      workspaceId: workspace?._id ?? null,
       student: {
         _id: student._id,
         name: studentName(student),
@@ -412,12 +417,15 @@ export const markReviewed = mutation({
     submissionId: v.id("submissions"),
     feedback: v.string(),
     privateNote: v.string(),
+    reviewDecision: v.optional(reviewDecisionValidator),
   },
   returns: v.object({ reviewedAt: v.number() }),
   handler: async (ctx, args) => {
     const { userId } = await requireAdmin(ctx);
     const submission = await ctx.db.get("submissions", args.submissionId);
     if (submission === null) throw appError("NOT_FOUND", "That attempt wasn’t found.");
+    const workspace = await ctx.db.get("workspaces", submission.workspaceId);
+    if (workspace) await writableClass(ctx, workspace.group);
     const newest = await ctx.db
       .query("submissions")
       .withIndex("by_workspaceId_and_attempt", (q) => q.eq("workspaceId", submission.workspaceId))
@@ -457,16 +465,19 @@ export const markReviewed = mutation({
       }
     }
 
+    const reviewDecision = args.reviewDecision ?? submission.reviewDecision ?? "complete";
+    const decisionChanged = reviewDecision !== submission.reviewDecision;
     const wasReviewed = submission.status === "reviewed";
     const reviewedAt = submission.reviewedAt ?? now;
-    if (!wasReviewed) {
+    if (!wasReviewed || decisionChanged) {
       await ctx.db.patch("submissions", submission._id, {
         status: "reviewed",
+        reviewDecision,
         reviewedBy: userId,
         reviewedAt,
       });
     }
-    if (!wasReviewed || changed) {
+    if (!wasReviewed || changed || decisionChanged) {
       const student = await ctx.db.get("students", submission.studentId);
       const assignment = await ctx.db.get("assignments", submission.assignmentId);
       const who = student ? studentName(student) : "a student";
@@ -476,10 +487,11 @@ export const markReviewed = mutation({
         table: "submissions",
         recordId: submission._id,
         summary: wasReviewed ? `Updated the review of ${who}’s ${what}` : `Reviewed ${who}’s ${what}`,
-        before: { status: submission.status },
+        before: { status: submission.status, reviewDecision: submission.reviewDecision ?? null },
         // Whether writing exists, never its text.
         after: {
           status: "reviewed",
+          reviewDecision,
           feedback: text.student.length > 0,
           privateNote: text.private.length > 0,
         },

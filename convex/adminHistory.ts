@@ -27,13 +27,24 @@ export const list = query({
     const names = new Map<string, string>();
     const page = [];
     for (const change of result.page) {
-      let actorName = names.get(change.actorId);
+      let actorName = change.actorName ?? names.get(change.actorId);
       if (actorName === undefined) {
         const admin = await ctx.db
           .query("admins")
           .withIndex("by_userId", (q) => q.eq("userId", change.actorId))
           .unique();
-        actorName = admin?.displayName ?? "Unknown admin";
+        actorName = admin?.displayName;
+        if (actorName === undefined) {
+          const deletion = await ctx.db.query("adminChanges")
+            .withIndex("by_recordId_and_at", q => q.eq("recordId", change.actorId)).order("desc").first();
+          if (deletion?.table === "admins" && deletion.before) {
+            const snapshot: unknown = JSON.parse(deletion.before);
+            if (snapshot && typeof snapshot === "object" && "displayName" in snapshot && typeof snapshot.displayName === "string") {
+              actorName = snapshot.displayName;
+            }
+          }
+        }
+        actorName ??= "Unknown admin";
         names.set(change.actorId, actorName);
       }
       page.push({

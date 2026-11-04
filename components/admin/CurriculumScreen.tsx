@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { FieldError, TextInput } from "@/components/ui/Field";
 import { Pill } from "@/components/ui/Pill";
@@ -11,7 +11,6 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { errorMessage } from "@/lib/errors";
 import {
-  adjacentYears,
   dateKey,
   formatNumericDate,
   formatTime,
@@ -22,24 +21,23 @@ import {
 import { slidesProvider } from "@/lib/slides";
 import { useNow } from "@/lib/useNow";
 import { useGroup } from "./GroupContext";
+import { ImportLessons } from "./ImportLessons";
+import { AddLessonForm } from "./AddLessonForm";
 import { YearTimeline } from "./YearTimeline";
 
 type Overview = NonNullable<typeof api.adminCurriculum.overview._returnType>;
 type OverviewDay = Overview["days"][number];
 
-const selectClass =
-  "h-10 rounded-[10px] border-[1.5px] border-bd bg-bg px-3 text-[15px] font-bold text-ink max-md:h-11 max-md:min-w-0";
-
-/** 4g. Curriculum days and the year's lesson dates. */
+/** 4g. Curriculum days, the year's schedule and turn-in windows. */
 export function CurriculumScreen() {
-  const { group } = useGroup();
+  const { group, selectedClass } = useGroup();
   const now = useNow();
-  const [curriculumId, setCurriculumId] = useState<string | undefined>(undefined);
-  const [year, setYear] = useState<string | undefined>(undefined);
+  const [importingLessons, setImportingLessons] = useState(false);
+  const [addingLesson, setAddingLesson] = useState(false);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
-  const data = useQuery(api.adminCurriculum.overview, { group, curriculumId, year });
+  const data = useQuery(api.adminCurriculum.overview, { group });
 
-  if (data === undefined) return <LoadingState label="Loading curriculum…" />;
+  if (data === undefined) return <LoadingState label="Loading class lessons…" />;
 
   const tz = data.timeZone;
   const unscheduled = data.days.filter((d) => d.schedule === null);
@@ -51,52 +49,21 @@ export function CurriculumScreen() {
 
   return (
     <main className="flex flex-col pb-10">
-      <div className="flex flex-wrap items-end gap-3 px-4 pt-4 md:px-7">
-        <h1 className="m-0 text-[34px] leading-[1.04] font-extrabold tracking-[-.035em] md:text-[46px]">
-          Curriculum
-        </h1>
-        {data.curricula.length > 0 && (
-          <select
-            aria-label="Curriculum"
-            className={`${selectClass} mb-0.5 max-md:w-full`}
-            value={data.curriculum?._id ?? ""}
-            onChange={(event) => {
-              setCurriculumId(event.target.value);
-              setSelectedDayId(null);
-            }}
-          >
-            {data.curricula.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <label htmlFor="schedule-year" className="mb-[11px] text-sm text-ink3 md:ml-auto">
-          Schedule year
-        </label>
-        <select
-          id="schedule-year"
-          className={`${selectClass} mb-0.5 border-ink`}
-          value={data.year}
-          onChange={(event) => setYear(event.target.value)}
-        >
-          {adjacentYears(data.currentYear).map((y) => (
-            <option key={y} value={y}>
-              {formatYear(y)}
-              {y === data.currentYear ? " (current)" : ""}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-end gap-3 px-4 md:px-7 pt-4">
+        <h1 className="m-0 text-[34px] md:text-[46px] leading-[1.04] font-extrabold tracking-[-.035em]">Curriculum</h1>
+        <span className="mb-[11px] ml-auto text-sm text-ink3">{formatYear(selectedClass?.year ?? data.year)}</span>
+        <Button variant="primary" disabled={!data.curriculum} onClick={() => setAddingLesson(v => !v)}>Add lesson</Button>
+        <Button disabled={!data.curriculum} onClick={() => setImportingLessons(v => !v)}>Import lessons</Button>
         <span className="mb-[11px] text-[13px] text-ink3">{timeZoneLabel(tz)}</span>
       </div>
-      <p className="mx-4 mt-2 mb-0 text-sm text-ink2 md:mx-7">
-        Days, cover images, slide links and assignments are shared by every year. The dates below
-        apply to {formatYear(data.year)} only.
+      <p className="mx-7 mt-2 mb-0 text-sm text-ink2">
+        Manage lessons, cover images, slide links and assignments for {selectedClass?.name ?? "this class"} · {formatYear(data.year)}.
       </p>
 
+      {importingLessons && <ImportLessons onClose={() => setImportingLessons(false)} />}
+      {addingLesson && data.curriculum && <AddLessonForm key={data.curriculum._id} curricula={[{ ...data.curriculum, group }]} timeZone={tz} onClose={() => setAddingLesson(false)} onSaved={() => setAddingLesson(false)} />}
       {data.curriculum === null ? (
-        <EmptyState title={`No ${group} curriculum yet`} className="mx-4 mt-4 md:mx-7" />
+        <EmptyState title={`No lessons for ${selectedClass?.name ?? group} yet`} className="mx-7 mt-4" />
       ) : (
         <>
           <section
@@ -142,11 +109,12 @@ export function CurriculumScreen() {
             </div>
           </section>
 
+          {selected && <DayActions key={selected._id} day={selected} />}
           {selected && (
             <label className="mx-4 mt-3.5 flex flex-col gap-1.5 md:hidden">
               <span className="text-sm font-bold">Day</span>
               <select
-                className={`${selectClass} w-full`}
+                className={"h-11 w-full rounded-xl border border-bd bg-bg px-3 text-sm"}
                 value={selected._id}
                 onChange={(event) => setSelectedDayId(event.target.value)}
               >
@@ -165,7 +133,7 @@ export function CurriculumScreen() {
               <DayContentPanel key={`content-${selected._id}`} day={selected} />
               <DayAssignmentsPanel day={selected} />
               <DaySchedulePanel
-                key={`schedule-${selected._id}-${data.year}-${selected.schedule?.lessonAt ?? "none"}`}
+                key={`schedule-${selected._id}-${data.year}-${selected.schedule?.lessonAt ?? "none"}-${selected.schedule?.endsAt ?? "none"}`}
                 day={selected}
                 year={data.year}
                 timeZone={tz}
@@ -178,6 +146,41 @@ export function CurriculumScreen() {
   );
 }
 
+function DayActions({ day }: { day: OverviewDay }) {
+  const remove = useMutation(api.adminCurriculum.deleteDay);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (confirming) dialog.current?.showModal();
+    else dialog.current?.close();
+  }, [confirming]);
+  return <div className="mx-7 mt-4 flex flex-wrap items-center gap-2">
+    <h2 className="mr-auto text-lg font-bold">Day {day.order} · {day.topic}</h2>
+    <Button onClick={() => {
+      const input = document.getElementById("day-topic");
+      input?.scrollIntoView({ behavior: "smooth", block: "center" }); input?.focus({ preventScroll: true });
+    }}>Edit day</Button>
+    <Button variant="danger" onClick={() => { setError(null); setConfirming(true); }}>Delete day</Button>
+    <dialog ref={dialog} aria-labelledby="delete-day-title" aria-describedby="delete-day-description"
+      onCancel={event => { event.preventDefault(); if (!busy) setConfirming(false); }}
+      className="fixed inset-0 m-auto max-h-[90dvh] w-[min(520px,calc(100%-32px))] overflow-auto rounded-[24px] border border-bd bg-bg p-6 text-ink shadow-card backdrop:bg-black/60">
+      <h2 id="delete-day-title" className="text-2xl font-bold">Delete day?</h2>
+      <p id="delete-day-description" className="mt-3 text-sm">Permanently delete Day {day.order} · {day.topic}, its {day.assignments.length} assignments and all scheduled dates? Days with saved student work or attendance cannot be deleted. Audit logs are kept.</p>
+      {error && <p role="alert" className="mt-3 text-sm text-cor-i">{error}</p>}
+      <div className="mt-5 flex justify-end gap-2">
+        <Button disabled={busy} onClick={() => setConfirming(false)}>Cancel</Button>
+        <Button variant="danger" loading={busy} onClick={async () => {
+          setBusy(true); setError(null);
+          try { await remove({ dayId: day._id }); setConfirming(false); }
+          catch (err) { setError(errorMessage(err)); } finally { setBusy(false); }
+        }}>Delete day</Button>
+      </div>
+    </dialog>
+  </div>;
+}
+
 function PanelLabel({ children, mint }: { children: React.ReactNode; mint?: boolean }) {
   return (
     <b className={`text-xs font-bold tracking-[.05em] ${mint ? "text-mint-i" : "text-ink3"}`}>
@@ -188,6 +191,22 @@ function PanelLabel({ children, mint }: { children: React.ReactNode; mint?: bool
 
 function DayContentPanel({ day }: { day: OverviewDay }) {
   const update = useMutation(api.adminCurriculum.updateDayContent);
+  const uploadUrl = useMutation(api.adminCurriculum.coverUploadUrl);
+  const setCover = useMutation(api.adminCurriculum.setCover);
+  const [uploading, setUploading] = useState(false);
+  const [coverMessage, setCoverMessage] = useState("");
+  async function uploadCover(file: File) {
+    if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type) || file.size > 5_000_000) { setError("Use a PNG, JPEG, WebP or GIF image up to 5 MB."); return; }
+    setUploading(true); setError(null); setCoverMessage("");
+    try {
+      const url = await uploadUrl({});
+      const response = await fetch(url, { method: "POST", headers: { "Content-Type": file.type }, body: file });
+      if (!response.ok) throw new Error("Image upload failed. Try again.");
+      const result = await response.json() as { storageId: Id<"_storage"> };
+      await setCover({ dayId: day._id, storageId: result.storageId });
+      setCoverMessage("Cover saved");
+    } catch (err) { setError(errorMessage(err)); } finally { setUploading(false); }
+  }
   const [topic, setTopic] = useState(day.topic);
   const [slidesUrl, setSlidesUrl] = useState(day.slidesUrl ?? "");
   const [saving, setSaving] = useState(false);
@@ -229,10 +248,15 @@ function DayContentPanel({ day }: { day: OverviewDay }) {
             )}
           </div>
           <span className="text-[12.5px] text-ink3">
-            Shown on the lesson page. 16:9 works best. Uploading arrives in Phase 7.
+            Shown on the lesson page. 16:9 works best. PNG, JPEG, WebP or GIF; up to 5 MB.
           </span>
         </div>
       </div>
+      <label className="flex flex-col gap-1.5 text-sm font-bold">{uploading ? "Uploading cover…" : "Upload or replace cover"}
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={uploading} onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void uploadCover(file); }} />
+      </label>
+      {day.coverUrl && <Button disabled={uploading} variant="secondary" onClick={async () => { setUploading(true); setError(null); try { await setCover({ dayId: day._id, storageId: null }); setCoverMessage("Cover removed"); } catch(err) { setError(errorMessage(err)); } finally { setUploading(false); } }}>Remove cover</Button>}
+      {coverMessage && <span role="status" className="text-sm text-ink3">{coverMessage}</span>}
       <div className="flex flex-col gap-1.5">
         <label htmlFor="day-slides" className="text-sm font-bold">
           Slides link
@@ -275,7 +299,7 @@ function DayAssignmentsPanel({ day }: { day: OverviewDay }) {
     >
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <PanelLabel>DAY {day.order} · ASSIGNMENTS</PanelLabel>
-        <ButtonLink href="/admin/assignments" size="sm" variant="secondary" className="h-[30px] rounded-lg bg-bg max-md:h-11">
+        <ButtonLink href={`/admin/assignments?dayId=${day._id}`} size="sm" variant="secondary" className="h-[30px] rounded-lg bg-bg">
           + New assignment
         </ButtonLink>
       </div>
@@ -316,19 +340,21 @@ function DaySchedulePanel({
   const setSchedule = useMutation(api.adminCurriculum.setSchedule);
   const [date, setDate] = useState(day.schedule ? dateKey(day.schedule.lessonAt, timeZone) : "");
   const [time, setTime] = useState(day.schedule ? timeKey(day.schedule.lessonAt, timeZone) : "16:00");
+  const [endTime, setEndTime] = useState(day.schedule?.endsAt ? timeKey(day.schedule.endsAt, timeZone) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const dirty =
     !day.schedule ||
     date !== dateKey(day.schedule.lessonAt, timeZone) ||
-    time !== timeKey(day.schedule.lessonAt, timeZone);
+    time !== timeKey(day.schedule.lessonAt, timeZone) ||
+    endTime !== (day.schedule.endsAt ? timeKey(day.schedule.endsAt, timeZone) : "");
 
   async function save() {
     setSaving(true);
     setError(null);
     try {
-      await setSchedule({ dayId: day._id as Id<"days">, year, date, time });
+      await setSchedule({ dayId: day._id as Id<"days">, year, date, time, endTime });
       setSavedAt(Date.now());
     } catch (err) {
       setError(errorMessage(err));
@@ -351,11 +377,15 @@ function DaySchedulePanel({
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="lesson-time" className="text-sm font-bold">
-            Time
+            Start time
           </label>
           <TextInput id="lesson-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
         </div>
       </div>
+      <label className="flex flex-col gap-1.5 text-sm font-bold" htmlFor="lesson-end-time">End time
+        <TextInput id="lesson-end-time" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
+      </label>
+      <p className="m-0 text-xs text-ink3">Start and end times use {timeZone}, on the lesson date.</p>
       <p className="m-0 text-sm text-ink2">
         {day.schedule ? (
           <>
@@ -371,7 +401,7 @@ function DaySchedulePanel({
         <Button
           variant="primary"
           size="lg"
-          disabled={!dirty || !date || !time}
+          disabled={!dirty || !date || !time || !endTime}
           loading={saving}
           loadingLabel="Saving…"
           onClick={() => void save()}

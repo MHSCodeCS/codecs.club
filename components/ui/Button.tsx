@@ -3,6 +3,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 export type ButtonVariant =
+  | "warning"
   | "primary"
   | "secondary"
   | "ghost"
@@ -12,6 +13,7 @@ export type ButtonVariant =
 export type ButtonSize = "sm" | "md" | "lg" | "xl";
 
 const variants: Record<ButtonVariant, string> = {
+  warning: "bg-amb text-on-amb hover:bg-amb-s",
   primary: "bg-mint text-on-mint hover:bg-mint2",
   secondary: "bg-sf2 text-ink hover:bg-ln",
   ghost: "bg-transparent text-ink2 hover:bg-sf2 hover:text-ink",

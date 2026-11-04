@@ -1,3 +1,4 @@
+import { avatarColorValidator, studentAvatarColor } from "./lib/studentAvatars";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
@@ -7,11 +8,13 @@ const viewerValidator = v.union(
   v.null(),
   v.object({
     role: v.literal("admin"),
+    avatarColor: avatarColorValidator,
     name: v.string(),
     username: v.string(),
   }),
   v.object({
     role: v.literal("student"),
+    avatarColor: avatarColorValidator,
     name: v.string(),
     loginCode: v.string(),
     group: groupValidator,
@@ -30,15 +33,16 @@ export const current = query({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .unique();
     if (admin !== null) {
-      return { role: "admin" as const, name: admin.displayName, username: admin.username };
+      return { role: "admin" as const, avatarColor: studentAvatarColor(admin), name: admin.displayName, username: admin.username };
     }
     const student = await ctx.db
       .query("students")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .unique();
-    if (student !== null) {
+    if (student !== null && student.deletedAt === undefined) {
       return {
         role: "student" as const,
+        avatarColor: studentAvatarColor(student),
         name: `${student.firstName} ${student.lastName}`,
         loginCode: student.loginCode,
         group: student.group,

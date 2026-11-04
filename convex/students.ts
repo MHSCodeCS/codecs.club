@@ -10,6 +10,6 @@ export const userIdForLoginCode = internalQuery({
       .query("students")
       .withIndex("by_loginCode", (q) => q.eq("loginCode", args.loginCode))
       .unique();
-    return student?.userId ?? null;
+    return student && student.deletedAt === undefined ? student.userId : null;
   },
 });

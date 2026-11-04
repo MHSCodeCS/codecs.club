@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Pill } from "@/components/ui/Pill";
 import { cn } from "@/lib/cn";
 import { formatShortDate } from "@/lib/format";
-import { dayState, type DayState, type TrackDay } from "@/lib/progress";
+import { assignmentColor, assignmentFill, dayState, type DayState, type TrackDay } from "@/lib/progress";
 
 /** The curriculum as a horizontal track of days, in learning order. */
 export function DayTrack({
@@ -38,7 +38,7 @@ function DayCard({ day, state, timeZone }: { day: TrackDay; state: DayState; tim
   const inProgress = day.assignments.filter((a) => a.started && !a.turnedIn).length;
 
   const surface = {
-    today: "bg-mint text-on-mint px-4",
+    today: "bg-sf px-4",
     done: "bg-mint-s",
     open: "bg-amb-s",
     upcoming: "bg-sf",
@@ -81,10 +81,11 @@ function DayCard({ day, state, timeZone }: { day: TrackDay; state: DayState; tim
     <li aria-current={today ? "step" : undefined} className="min-w-0">
       <Link
         href={`/learn/days/${day._id}`}
+        style={{ background: assignmentFill(day.assignments, true) }}
         className={cn(
           "flex h-full min-h-[124px] flex-col gap-1 rounded-[18px] px-3.5 pt-3 pb-3.5 text-ink no-underline transition-shadow hover:shadow-card",
           surface,
-          today && "text-on-mint hover:text-on-mint",
+
         )}
       >
         <span
@@ -123,8 +124,8 @@ export function DaysCompleteBar({
   now: number;
   timeZone: string;
 }) {
-  const states = days.map((day) => dayState(day, now, timeZone));
-  const complete = states.filter((s) => s.kind === "done").length;
+  void now; void timeZone;
+  const complete = days.filter(day => day.assignments.length > 0 && day.assignments.every(a => assignmentColor(a) === "mint")).length;
   return (
     <div className="flex w-[300px] flex-col gap-2 pb-2">
       <div className="flex items-baseline justify-between text-sm">
@@ -133,26 +134,14 @@ export function DaysCompleteBar({
           <b className="text-xl font-extrabold text-ink">{complete}</b> of {days.length}
         </span>
       </div>
-      <div
-        aria-hidden="true"
-        className="grid gap-1"
-        style={{ gridTemplateColumns: `repeat(${Math.max(days.length, 1)}, 1fr)` }}
-      >
-        {states.map((state, i) => (
-          <i
-            key={i}
-            className={cn(
-              "h-2.5 rounded-[5px]",
-              state.kind === "done"
-                ? "bg-mint"
-                : state.kind === "open"
-                  ? "bg-amb"
-                  : state.kind === "today"
-                    ? "bg-mint-s2"
-                    : "bg-sf2",
-            )}
-          />
-        ))}
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(days.length, 1)}, minmax(0, 1fr))` }}>
+        {days.map(day => <div
+          key={day._id}
+          role="img"
+          aria-label={`Day ${day.order}: ${day.assignments.map(a => `${a.title}: ${assignmentColor(a) === "mint" ? "Complete" : assignmentColor(a) === "cor" ? "Incomplete" : "Pending"}`).join(", ") || "No assignments"}`}
+          className="h-2.5 rounded-[5px] bg-sf2"
+          style={{ background: assignmentFill(day.assignments) }}
+        />)}
       </div>
     </div>
   );

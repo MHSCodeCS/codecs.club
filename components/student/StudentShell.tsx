@@ -6,9 +6,8 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useSignOut } from "@/components/auth/RequireRole";
 import { useStudentViewer } from "@/components/auth/ViewerContext";
-import { Avatar } from "@/components/ui/Avatar";
-import { Button } from "@/components/ui/Button";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { StudentPresence } from "@/components/workspace/useAssistancePresence";
+import { ProfileMenu } from "@/components/ui/ProfileMenu";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/cn";
 import { isSameDay } from "@/lib/format";
@@ -43,6 +42,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-full flex-col bg-bg">
+      <StudentPresence />
       <header className="flex h-[68px] flex-none items-center gap-1 px-6 lg:px-10">
         <Link
           href="/learn"
@@ -68,15 +68,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2.5">
-          <ThemeToggle className="mr-2 hidden xl:inline-flex" />
-          <Avatar name={viewer.name} />
-          <span className="flex flex-col leading-[1.2]">
-            <b className="text-sm font-bold">{viewer.name}</b>
-            <span className="font-mono text-xs font-medium text-ink3">{viewer.loginCode}</span>
-          </span>
-          <Button variant="ghost" size="md" className="ml-1.5" onClick={() => void signOut()}>
-            Sign out
-          </Button>
+          <ProfileMenu name={viewer.name} color={viewer.avatarColor} loginCode={viewer.loginCode} onSignOut={() => void signOut()} />
         </div>
       </header>
       <div className="flex flex-1 flex-col">{children}</div>

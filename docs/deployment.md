@@ -69,6 +69,36 @@ npx convex run admins:setDisplayName '{"username":"rivera","displayName":"Max"}'
 
 ## Daily development
 
+### Local backend on this Mac
+
+The current local setup uses `CONVEX_DEPLOYMENT=local:local-code_cs-app`, with
+`NEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210` and
+`NEXT_PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3211` in `.env.local`.
+Run `npx convex dev` and `npm run dev` in separate terminals. The first command
+starts the local backend and watches backend changes; the second serves the app
+at http://localhost:3000. Keep both running. Local data persists on this Mac and
+is separate from the cloud deployments. Local admin accounts and auth keys are
+configured separately; switching backends requires signing in again.
+
+Student management supports adding individual students with generated unique
+login codes and editing names, login codes, groups and curricula. If a group
+has no curriculum, the Add student form can create its first empty curriculum.
+CSV roster import with mapping/preview and printable login tickets are available on Students; see [student intake](admin-dashboard.md#student-intake-and-management) for the approved matching rules and limits.
+
+In Curriculum, Add lesson creates a named curriculum day and its current-year
+schedule using the school time zone. The lesson date also determines its
+assignment turn-in window.
+
+On Students, the yellow Select Lesson button opens a lesson picker. Selecting
+one opens its attendance view and changes the button to green Save Attendance.
+Present, Late and Absent edits remain unsaved until Save Attendance succeeds.
+You can correct and save a lesson repeatedly; changes update existing marks.
+Change lesson lets you reopen another lesson in the current school year and
+asks before discarding unsaved marks. Attendance is stored per student and
+lesson with admin change history, independently of online presence.
+
+### Cloud development setup
+
 Run in separate terminals:
 
 ```bash

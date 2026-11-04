@@ -8,6 +8,35 @@ Basic and advanced are permanent groups. Curricula contain ordered topic days wi
 
 Each day has a cover image shown on its lesson page and a link to slides made in Canva or Figma Slides (D01). Future lesson release and effects of published edits are pending choices in the [decision register](decisions-and-verification.md).
 
+## Live authoring (Phase 7)
+
+In Curriculum, choose a day and use New assignment, or open Assignments and
+choose a lesson. Save draft stores a private revision; Publish to lesson
+makes that revision available immediately to students in the curriculum. For
+published work, draft edits leave the published title, type, task and checks
+unchanged. Revision history can inspect old content and load it into the
+editor; saving it creates another revision rather than modifying history.
+Concurrent edits are rejected so a stale tab cannot overwrite another save.
+
+Guided assignments support a summary, instructions, expected output, editable
+starter files, named output checks, partial minimum, loop observation and check
+input. Publishing requires instructions and valid, nonempty guided checks.
+Drafts can retain incomplete check configuration. File names and limits match
+student workspaces (20 files, 100 KB each, 400 KB total). Open-ended projects
+start with a blank main.py and no guided rules.
+
+Publishing revised content updates tasks/checks explicitly; existing student
+files and submitted versions are never replaced. New starter files apply only
+to new workspaces. Historical checks retain their original revision and become
+stale against a newly published task; no automatic re-evaluation is performed.
+Additional release gating and alternative re-evaluation policies remain future
+choices under D04/D08.
+
+Lesson covers are uploaded, replaced or removed in Curriculum. PNG, JPEG, WebP
+and GIF are supported up to 5 MB. Metadata and storage ids are validated on the
+backend; the student lesson page resolves the stored image. Replaced images
+are retained so shared/historical references are not silently deleted.
+
 ## Guided evaluation
 
 Check behavior/output rather than equality with a model source-code solution. Each assignment defines meaningful named requirements, checks associated with those requirements, and a minimum for partial completion.

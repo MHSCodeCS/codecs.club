@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-[Documentation index](README.md). Updated **October 28, 2026**. This orders the agreed features into phases. It adds no new scope; feature rules stay in the other guides.
+[Documentation index](README.md). Updated **October 27, 2026**. This orders the agreed features into phases. It adds no new scope; feature rules stay in the other guides.
 
 The visual reference is the Claude Design project **CodeCS Basic v2**, saved at [`design/CodeCS Basic v2.dc.html`](../design/CodeCS%20Basic%20v2.dc.html) (10 screens at 1366×768, light and dark). `support.js` and `image-slot.js` from that project are design-tool runtime only and are not part of the app.
 
@@ -14,8 +14,19 @@ The visual reference is the Claude Design project **CodeCS Basic v2**, saved at 
 | Backend | Full Convex schema (`convex/schema.ts`), role checks (`convex/lib/access.ts`), login-code allocation, time-zone helpers, admin change history, seed of the design's sample school |
 | Sign-in | Convex Auth: student login code (`ConvexCredentials`, rate-limited) and admin username/password (`Password`, sign-up refused; accounts created with `admins:createAdmin`) |
 | Live screens | Learning home, Lesson day, Admin Students (roster, attendance, group/curriculum/login-code changes), Admin Curriculum (timeline, day content, lesson dates), Settings (read-only), History |
-| Preview screens | My work, Assignments editor, Assistance, Review render sample data from `lib/fixtures.ts` behind a visible “Preview” banner; nothing on them is saved (the Workspace went live in Phase 3, Review in Phase 6) |
+| Preview screens | Assistance renders sample data from `lib/fixtures.ts` behind a visible “Preview” banner; nothing on them is saved (My work went live in Phase 2, the Workspace in Phase 3, Review in Phase 6, assignment authoring in Phase 7) |
 | Tests | `npm test`: login codes, sign-in round trips, student/admin access refusals, reassignment history, lesson time zones, partial rule |
+
+## Phase 2 — Student path, live (built)
+
+| Area | What exists |
+| --- | --- |
+| My work | `/learn/work` reads `convex/myWork.ts`, with no fixtures or Preview banner. Saved work is grouped by original year, group and curriculum, labeled current or previous, and paginated with Load more work |
+| Progress | Live saved timestamps and latest turn-in/review state, plus working-copy resume/open links; turn-in never closes |
+| History | Paginated submission attempts, submitted version/time, superseded/waiting/reviewed states, guided-check outcomes and student-visible feedback with author; private notes never leave the backend |
+| Submitted versions | View attempt opens the immutable submitted files, with file switching and read-only code. The separate working-copy link resumes editing |
+| Past curricula | Students retain access to their own saved work after curriculum/group changes and across years. Workspace headers show original year/group/curriculum; historical lesson navigation returns to My work |
+| Verification | Typecheck and changed-file lint pass; 102 tests pass, including ownership refusals, pagination, historical access after reassignment, feedback visibility and immutable snapshots. Backend synced to local deployment `local-code_cs-app`; production unchanged. Browser visual verification remains pending |
 
 ## Phase 3 — Editor and persistence (built)
 
@@ -85,18 +96,42 @@ Product corrections from the club (decisions D13–D17), applied across code, se
 | Schema | Removed fields kept optional and marked deprecated so stored documents validate: `lessonSchedules.turnInClosesAt`, `settings.turnInDays`, `settings.closeTime`, `students.seatIndex`. `seed:applyCorrections` updates an older dev deployment in place (see [deployment](deployment.md#updating-a-deployment-seeded-before-october-28-2026)) |
 | Tests | Turn-in accepted months after the lesson and on unscheduled days; admin first names and title refusal; the seed has 6 days and no seats; `applyCorrections` trims an older 8-day seed without losing work and is idempotent |
 
+## Phase 7 — Admin content (built locally)
+
+| Area | What exists |
+| --- | --- |
+| Assignment editor | `/admin/assignments` selects a real lesson; `/admin/assignments/[assignmentId]` edits the saved assignment. Curriculum's New assignment link carries the chosen day. No fixtures or Preview banner |
+| Drafts/publication | Save draft appends a private revision. A published assignment keeps its published title, type, instructions and checks until Publish to lesson is used. Publication is immediate for students assigned to that curriculum |
+| Content | Guided and open-ended tasks, title, summary, instructions with inline preview, expected output, starter file add/edit/upload/remove, named output checks, per-assignment partial minimum, loop observation and check input. Open-ended work starts from a blank main.py |
+| Revisions | Each save creates an immutable revision with author/time. Paginated history can inspect an older revision and load it into the editor as an unsaved draft. Conflicting edits from another tab are refused. Unsaved edits warn on page unload and editor assignment navigation |
+| Published edits | Explicit publication updates task/check definitions; existing student files, submitted versions and check results are preserved. New starters apply only to new workspaces; old checks become stale without automatic re-evaluation |
+| Covers | Admin-only upload, replacement and removal in Curriculum; PNG/JPEG/WebP/GIF up to 5 MB, enforced on both sides. Storage ids are persisted and URLs resolved for lesson pages; removed/replaced files are retained rather than deleting potentially shared assets |
+| Verification | 106 tests pass, including draft visibility, publication, edit conflicts, preserved student work/checks/submissions, open-ended blank starters, validation and cover authorization. Typecheck, changed-file lint and production build pass; local catalog and upload endpoint verified. The build initially stopped at Next.js's security notice and passed on retry; a framework security upgrade remains recommended. Browser visual verification remains pending; production unchanged |
+
+## Phase 8 — Admin students (built locally)
+
+| Area | What exists |
+| --- | --- |
+| Approved intake | D03 resolved: CSV exports with mapped first name, last name and optional existing login-code columns; up to 100 students / 1 MB per batch |
+| Preview | Explicit new-student choice per row; returning students matched only by existing login code. Shows existing identity/group/curriculum, proposed names/codes, same-name warnings and per-row errors before committing |
+| Commit | Admin-only, atomic import; wrong-group curricula, invalid names, duplicate returning identities and unknown codes refused. Revalidates the preview to refuse intervening roster changes. Retry receipts prevent duplicate identities/history after a dropped response |
+| Preservation | Returning rows retain student/user identity, login code, since-year, avatar, saved work and submissions; names and target group/curriculum update. Same-name new people remain separate |
+| Tickets | Group tickets and individual reprints use saved names/codes. Preview includes an editable website address and print / save PDF; cuttable cards include sign-in instructions and exclude navigation |
+| History | Changed students record actor/time and before/after values in the same transaction. Unchanged imports and successful retries do not duplicate change history; existing student-edit and attendance history remains intact |
+| Verification | 116 tests pass, including import authorization, identity/work preservation, code collisions, validation rollback, duplicate matches, stale previews, idempotent retries, history and CSV parsing. Typecheck, changed-file lint and production build pass; the build required an unsandboxed retry and displayed Next.js's existing security-upgrade notice. Browser visual verification deferred at the owner's request. Backend synced to local development; production unchanged |
+
 ## Later phases
 
 Each phase is its own piece of work. Screens move off fixtures as their phase lands; the fixture shapes already match the planned query results.
 
 | Phase | Scope | Blocked on |
 | --- | --- | --- |
-| 2. Student path, live | My work from real workspaces/submissions/feedback; historical context labels; past-curriculum access | — |
+| 2. Student path, live | Built (see above); verified against the local backend on October 27, 2026 | — |
 | 3. Editor and persistence | Built (see above); checked live against the dev deployment on October 15, 2026 | — |
 | 4. Python runtime | Built (see above); checked live against the dev deployment on October 15, 2026. Still needs Chromebook/school-network tests | V01–V03 device tests |
 | 5. Guided evaluation | Built (see above); checked live against the dev deployment on October 15, 2026 | — |
 | 6. Turn-in and review | Built (see above); checked live against the dev deployment on October 15–16, 2026 (student and admin) | — |
-| 7. Admin content | Cover image upload (file storage); assignment authoring with revisions, drafts and publishing | D04, D08 |
-| 8. Admin students | Roster import with preview; printable login tickets; history for every write | D03 |
-| 9. Assistance | Presence (online/idle/offline); help requests and queue; join/leave notifications (by the admin's first name); collaborative editing with labeled cursors; guidance notes; attributed remote Run | V04, V05 |
+| 7. Admin content | Built locally (see above); current publication behavior documented, with future release gating/re-evaluation changes still tracked as D04/D08 | — |
+| 8. Admin students | Built locally (see above); D03 approved October 27, 2026 | — |
+| 9. Assistance | Presence (online/idle/offline); help requests and queue; seat assignment; join/leave notifications; collaborative editing with labeled cursors; guidance notes; attributed remote Run | V04, V05 |
 | 10. Hardening and release | Settings editing; authorization audit; accessibility pass; Chromebook and school-network tests; 50-active-student load check; hosting and domain | D02, D12, V02, V09, V10, V12 |

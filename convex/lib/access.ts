@@ -39,7 +39,16 @@ export async function requireStudent(
     .query("students")
     .withIndex("by_userId", (q) => q.eq("userId", userId))
     .unique();
-  if (student === null) throw appError("FORBIDDEN", "Only students can do that.");
+  if (student === null || student.deletedAt !== undefined) throw appError("FORBIDDEN", "Only students can do that.");
+  // Managed classes share the curriculum shown in the teacher's class view.
+  // Keep the stored placement intact for enrollment history and legacy groups.
+  const classroom = await ctx.db.query("classes")
+    .withIndex("by_group", q => q.eq("group", student.group)).unique();
+  if (classroom?.status === "current" && classroom.deletedAt === undefined) {
+    const curriculum = await ctx.db.query("curricula")
+      .withIndex("by_group", q => q.eq("group", student.group)).order("desc").first();
+    if (curriculum) return { userId, student: { ...student, curriculumId: curriculum._id } };
+  }
   return { userId, student };
 }
 

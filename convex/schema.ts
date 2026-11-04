@@ -1,9 +1,11 @@
+import { storedAvatarColorValidator } from "./lib/studentAvatars";
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-/** The two permanent groups. Basic is the beginner curriculum. */
-export const groupValidator = v.union(v.literal("basic"), v.literal("advanced"));
+/** Class routing key; the original basic/advanced keys remain valid. */
+export const groupValidator = v.string();
+export const deskValidator = v.object({ seat: v.number(), x: v.number(), y: v.number(), rotation: v.number() });
 export const assignmentTypeValidator = v.union(v.literal("guided"), v.literal("open"));
 export const outcomeValidator = v.union(
   v.literal("complete"),
@@ -22,6 +24,7 @@ export const attendanceStatusValidator = v.union(
   v.literal("absent"),
 );
 export const fileValidator = v.object({ name: v.string(), content: v.string() });
+export const reviewDecisionValidator = v.union(v.literal("needsWork"), v.literal("complete"));
 export const submissionStatusValidator = v.union(
   v.literal("unreviewed"),
   v.literal("reviewed"),
@@ -60,6 +63,9 @@ export default defineSchema({
     userId: v.id("users"),
     username: v.string(),
     displayName: v.string(),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    avatarColor: v.optional(storedAvatarColorValidator),
   })
     .index("by_userId", ["userId"])
     .index("by_username", ["username"]),
@@ -76,13 +82,37 @@ export default defineSchema({
     group: groupValidator,
     curriculumId: v.id("curricula"),
     sinceYear: v.string(),
-    /** Deprecated, unused: there is no assigned seating. Kept so stored documents validate. */
+    avatarColor: v.optional(storedAvatarColorValidator),
+    /** Deprecated: no assigned seating. Retained for stored documents. */
     seatIndex: v.optional(v.number()),
+    deletedAt: v.optional(v.number()),
   })
     .index("by_loginCode", ["loginCode"])
+    .index("by_firstName_and_lastName", ["firstName", "lastName"])
     .index("by_userId", ["userId"])
     .index("by_group_and_lastName", ["group", "lastName"])
-    .index("by_curriculumId", ["curriculumId"]),
+    .index("by_group_and_deletedAt_and_lastName", ["group", "deletedAt", "lastName"])
+    .index("by_group_and_seatIndex", ["group", "seatIndex"])
+    .index("by_curriculumId", ["curriculumId"])
+    .searchIndex("search_firstName", { searchField: "firstName" })
+    .searchIndex("search_lastName", { searchField: "lastName" }),
+
+  /** Retry receipt: one atomic roster import, scoped to its acting admin. */
+  classroomLayouts: defineTable({
+    group: groupValidator,
+    revision: v.number(),
+    desks: v.array(deskValidator),
+  }).index("by_group", ["group"]),
+
+  rosterImports: defineTable({
+    actorId: v.id("users"),
+    key: v.string(),
+    payload: v.string(),
+    studentIds: v.array(v.id("students")),
+  }).index("by_actorId_and_key", ["actorId", "key"]),
+
+  classes: defineTable({ name: v.string(), year: v.string(), group: v.string(), deletedAt: v.optional(v.number()), status: v.union(v.literal("current"), v.literal("upcoming"), v.literal("archived")) }).index("by_group", ["group"]).index("by_deletedAt", ["deletedAt"]),
+  enrollments: defineTable({ studentId: v.id("students"), group: v.string(), year: v.string(), curriculumId: v.id("curricula") }).index("by_group", ["group"]).index("by_studentId", ["studentId"]).index("by_studentId_and_group", ["studentId", "group"]),
 
   curricula: defineTable({
     name: v.string(),
@@ -92,18 +122,20 @@ export default defineSchema({
   /** An ordered topic unit. Content is shared by every year. */
   days: defineTable({
     curriculumId: v.id("curricula"),
+    importedFromDayId: v.optional(v.id("days")),
     order: v.number(),
     topic: v.string(),
     coverImageId: v.optional(v.id("_storage")),
     slidesUrl: v.optional(v.string()),
-  }).index("by_curriculumId_and_order", ["curriculumId", "order"]),
+  }).index("by_curriculumId_and_order", ["curriculumId", "order"]).index("by_curriculumId_and_importedFromDayId", ["curriculumId", "importedFromDayId"]),
 
   /** Year-specific lesson date. Turn-in never closes, so this is only the lesson. */
   lessonSchedules: defineTable({
     dayId: v.id("days"),
     year: v.string(),
     lessonAt: v.number(),
-    /** Deprecated, unused: turn-in no longer closes. Kept so stored documents validate. */
+    endsAt: v.optional(v.number()),
+    /** Deprecated: turn-in never closes. */
     turnInClosesAt: v.optional(v.number()),
   })
     .index("by_dayId_and_year", ["dayId", "year"])
@@ -134,6 +166,8 @@ export default defineSchema({
   /** Immutable-once-published task content and evaluation rule. */
   assignmentRevisions: defineTable({
     assignmentId: v.id("assignments"),
+    title: v.optional(v.string()),
+    type: v.optional(assignmentTypeValidator),
     summary: v.string(),
     instructions: v.string(),
     expectedOutput: v.optional(v.string()),
@@ -179,6 +213,7 @@ export default defineSchema({
      * Unset on rows written before Phase 3; read as 0.
      */
     revision: v.optional(v.number()),
+    sharedState: v.optional(v.bytes()),
   }).index("by_workspaceId_and_name", ["workspaceId", "name"]),
 
   /** Immutable whole-workspace snapshots; restoring adds a version. */
@@ -235,6 +270,7 @@ export default defineSchema({
      * reviewed (D09). It stays visible but leaves the review queue.
      */
     status: submissionStatusValidator,
+    reviewDecision: v.optional(reviewDecisionValidator),
     reviewedBy: v.optional(v.id("users")),
     reviewedAt: v.optional(v.number()),
     /** Client-generated key so a retried turn-in cannot create two attempts. */
@@ -271,14 +307,46 @@ export default defineSchema({
     resolvedBy: v.optional(v.id("users")),
   })
     .index("by_status_and_createdAt", ["status", "createdAt"])
-    .index("by_workspaceId_and_status", ["workspaceId", "status"]),
+    .index("by_workspaceId_and_status", ["workspaceId", "status"])
+    .index("by_studentId_and_status", ["studentId", "status"]),
 
   assistSessions: defineTable({
     workspaceId: v.id("workspaces"),
     adminId: v.id("users"),
     joinedAt: v.number(),
     leftAt: v.optional(v.number()),
-  }).index("by_workspaceId_and_joinedAt", ["workspaceId", "joinedAt"]),
+    expiresAt: v.optional(v.number()),
+  }).index("by_workspaceId_and_joinedAt", ["workspaceId", "joinedAt"])
+    .index("by_workspaceId_and_adminId_and_leftAt", ["workspaceId", "adminId", "leftAt"]),
+
+  assistEvents: defineTable({
+    workspaceId: v.id("workspaces"),
+    actorId: v.id("users"),
+    name: v.string(),
+    kind: v.union(v.literal("joined"), v.literal("left")),
+    at: v.number(),
+  }).index("by_workspaceId_and_at", ["workspaceId", "at"]),
+
+  workspacePresence: defineTable({ workspaceId: v.id("workspaces"), token: v.string() })
+    .index("by_workspaceId", ["workspaceId"]),
+
+  remoteRuns: defineTable({
+    workspaceId: v.id("workspaces"),
+    versionId: v.id("workVersions"),
+    actorId: v.id("users"),
+    actorName: v.string(),
+    key: v.string(),
+    entry: v.string(),
+    packages: v.array(v.string()),
+    status: v.union(v.literal("running"), v.literal("finished"), v.literal("error"), v.literal("stopped"), v.literal("interrupted")),
+    output: v.string(),
+    outputTruncated: v.boolean(),
+    stopRequested: v.boolean(),
+    startedAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+  }).index("by_workspaceId_and_startedAt", ["workspaceId", "startedAt"])
+    .index("by_actorId_and_key", ["actorId", "key"]),
 
   guidanceNotes: defineTable({
     workspaceId: v.id("workspaces"),
@@ -300,6 +368,7 @@ export default defineSchema({
   /** Who changed managed data, when, and what changed. Never holds secrets. */
   adminChanges: defineTable({
     actorId: v.id("users"),
+    actorName: v.optional(v.string()),
     at: v.number(),
     table: v.string(),
     recordId: v.string(),

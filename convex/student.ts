@@ -1,9 +1,10 @@
+import { adminFirstName } from "./lib/adminNames";
+import { classYear, classFor } from "./lib/classes";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { getSettings, requireStudent } from "./lib/access";
-import { adminFirstName } from "./lib/adminNames";
-import { assignmentTypeValidator, groupValidator, outcomeValidator } from "./schema";
+import { assignmentTypeValidator, groupValidator, outcomeValidator, reviewDecisionValidator } from "./schema";
 
 const MAX_DAYS = 100;
 const MAX_ASSIGNMENTS_PER_DAY = 50;
@@ -16,10 +17,12 @@ const assignmentSummaryValidator = v.object({
   started: v.boolean(),
   savedAt: v.union(v.number(), v.null()),
   turnedIn: v.boolean(),
+  reviewed: v.boolean(),
+  reviewDecision: v.union(reviewDecisionValidator, v.null()),
   latestOutcome: v.union(outcomeValidator, v.null()),
 });
 
-const dayValidator = v.object({
+export const dayValidator = v.object({
   _id: v.id("days"),
   order: v.number(),
   topic: v.string(),
@@ -30,7 +33,7 @@ const dayValidator = v.object({
 type AssignmentSummary = typeof assignmentSummaryValidator.type;
 
 /** Published assignments on a day, with this student's progress on each. */
-async function assignmentSummaries(
+export async function assignmentSummaries(
   ctx: QueryCtx,
   student: Doc<"students">,
   dayId: Id<"days">,
@@ -72,6 +75,8 @@ async function assignmentSummaries(
       started: workspace !== null,
       savedAt: workspace?.updatedAt ?? null,
       turnedIn: latestSubmission !== null,
+      reviewed: latestSubmission?.status === "reviewed",
+      reviewDecision: latestSubmission?.reviewDecision ?? null,
       latestOutcome: latestCheck?.outcome ?? null,
     });
   }
@@ -96,6 +101,7 @@ export const home = query({
       group: groupValidator,
     }),
     curriculum: v.object({ _id: v.id("curricula"), name: v.string() }),
+    className: v.string(),
     year: v.string(),
     timeZone: v.string(),
     days: v.array(dayValidator),
@@ -119,9 +125,10 @@ export const home = query({
       .query("days")
       .withIndex("by_curriculumId_and_order", (q) => q.eq("curriculumId", curriculum._id))
       .take(MAX_DAYS);
+    const classroom = await classFor(ctx, student.group);
     const days = [];
-    for (const day of dayDocs) {
-      const schedule = await scheduleFor(ctx, day._id, settings.currentYear);
+    for (const day of classroom && classroom.status !== "current" ? [] : dayDocs) {
+      const schedule = await scheduleFor(ctx, day._id, await classYear(ctx, student.group));
       days.push({
         _id: day._id,
         order: day.order,
@@ -160,7 +167,8 @@ export const home = query({
         group: student.group,
       },
       curriculum: { _id: curriculum._id, name: curriculum.name },
-      year: settings.currentYear,
+      className: classroom?.name ?? (student.group === "basic" ? "Basic" : student.group === "advanced" ? "Advanced" : "Your class"),
+      year: await classYear(ctx, student.group),
       timeZone: settings.timeZone,
       days,
       latestFeedback,
@@ -190,6 +198,8 @@ export const day = query({
   ),
   handler: async (ctx, args) => {
     const { student } = await requireStudent(ctx);
+    const classroom = await classFor(ctx, student.group);
+    if (classroom && classroom.status !== "current") return null;
     const dayId = ctx.db.normalizeId("days", args.dayId);
     if (dayId === null) return null;
     const dayDoc = await ctx.db.get("days", dayId);
@@ -197,10 +207,10 @@ export const day = query({
     if (dayDoc === null || dayDoc.curriculumId !== student.curriculumId) return null;
     const settings = await getSettings(ctx);
     const curriculum = await ctx.db.get("curricula", dayDoc.curriculumId);
-    const schedule = await scheduleFor(ctx, dayDoc._id, settings.currentYear);
+    const schedule = await scheduleFor(ctx, dayDoc._id, await classYear(ctx, student.group));
     return {
       curriculumName: curriculum?.name ?? "",
-      year: settings.currentYear,
+      year: await classYear(ctx, student.group),
       timeZone: settings.timeZone,
       day: {
         _id: dayDoc._id,

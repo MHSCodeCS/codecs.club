@@ -3,6 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { useRef, useState } from "react";
+import { Pill } from "@/components/ui/Pill";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { api } from "@/convex/_generated/api";
@@ -26,12 +27,10 @@ export function TurnInCard({
   workspaceId,
   timeZone,
   sync,
-  unsavedChanges,
 }: {
   workspaceId: Id<"workspaces">;
   timeZone: string;
   sync: WorkspaceSync;
-  unsavedChanges: boolean;
 }) {
   const status = useQuery(api.submissions.forWorkspace, { workspaceId });
   const turnIn = useMutation(api.submissions.turnIn);
@@ -76,12 +75,13 @@ export function TurnInCard({
   return (
     <div className="m-2.5 mt-0 flex flex-none flex-col gap-2.5 rounded-2xl bg-bg px-4 pt-3.5 pb-4">
       <b className="font-bold">{latest ? "Turned in" : "Not turned in"}</b>
+      {latest?.reviewDecision && <Pill tone={latest.reviewDecision === "needsWork" ? "coral" : "mint"}>{latest.reviewDecision === "needsWork" ? "Needs Work" : "Done"}</Pill>}
       {latest && (
         <span role="status" className="-mt-1 text-[13px] text-ink2">
           Attempt {latest.attempt} · v{latest.versionNumber} · {when(latest.submittedAt)} ·{" "}
           {latest.status === "reviewed" ? (
             <b className="font-bold text-vio-i">
-              Reviewed{latest.reviewerName ? ` by ${latest.reviewerName}` : ""}
+              {latest.reviewDecision === "needsWork" ? "Needs Work" : latest.reviewDecision === "complete" ? "Done" : "Reviewed"}{latest.reviewerName ? ` by ${latest.reviewerName}` : ""}
               {latest.reviewedAt ? ` · ${formatShortDate(latest.reviewedAt, timeZone)}` : ""}
             </b>
           ) : (
@@ -120,15 +120,7 @@ export function TurnInCard({
         <span role="status" className="text-[12.5px] font-semibold text-mint-i">
           ✓ {confirmation}
         </span>
-      ) : (
-        <span className="text-[12.5px] text-ink3">
-          {status === undefined
-            ? " "
-            : unsavedChanges
-              ? "Saves your latest changes, then sends them. You can keep editing after."
-              : `Sends your last saved version (v${status.nextVersion}). You can keep editing after.`}
-        </span>
-      )}
+      ) : null}
     </div>
   );
 }

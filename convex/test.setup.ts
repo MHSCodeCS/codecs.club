@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import rateLimiter from "@convex-dev/rate-limiter/test";
+import presence from "@convex-dev/presence/test";
 import { convexTest } from "convex-test";
 import { exportJWK, exportPKCS8, generateKeyPair } from "jose";
 import schema from "./schema";
@@ -10,6 +11,7 @@ export const modules = import.meta.glob("./**/*.ts");
 export function setupConvex() {
   const t = convexTest(schema, modules);
   rateLimiter.register(t);
+  presence.register(t);
   return t;
 }
 

@@ -1,21 +1,20 @@
 import { cn } from "@/lib/cn";
 
 export function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]!.toUpperCase())
-    .join("");
+  const parts = name.split(/\s+/).filter(Boolean);
+  const selected = parts.length > 1 ? [parts[0]!, parts[parts.length - 1]!] : parts;
+  return selected.map(part => part[0]!.toUpperCase()).join("");
 }
 
 export function Avatar({
   name,
   tone = "mint",
+  color,
   size = 34,
   className,
 }: {
   name: string;
+  color?: string;
   tone?: "mint" | "violet" | "neutral";
   size?: number;
   className?: string;
@@ -34,7 +33,7 @@ export function Avatar({
         toneClass,
         className,
       )}
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size, ...(color ? { backgroundColor: color, color: "#14251e" } : {}) }}
     >
       {initials(name)}
     </span>

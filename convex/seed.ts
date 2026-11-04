@@ -1,3 +1,4 @@
+import { avatarColors } from "./lib/studentAvatars";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx } from "./_generated/server";
@@ -390,6 +391,7 @@ export const run = internalMutation({
       const userId = await ctx.db.insert("users", { name: `${first} ${last}`, role: "student" });
       const loginCode = await allocateLoginCode(ctx, first, last);
       const id = await ctx.db.insert("students", {
+        avatarColor: avatarColors[Math.floor(Math.random() * avatarColors.length)],
         userId,
         firstName: first,
         lastName: last,

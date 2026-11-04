@@ -1,3 +1,5 @@
+import * as Y from "yjs";
+import { sharedDocument, replaceSharedText } from "../convex/lib/sharedText";
 import { compareFileNames } from "../convex/lib/workFiles";
 
 /**
@@ -15,9 +17,9 @@ import { compareFileNames } from "../convex/lib/workFiles";
  *   version history when that save lands.
  */
 
-export type ServerFile = { name: string; content: string; revision: number };
-export type SaveFile = { name: string; content: string; baseRevision: number };
-export type SaveResult = { savedAt: number; files: Array<{ name: string; revision: number }> };
+export type ServerFile = { name: string; content: string; revision: number; sharedState?: ArrayBuffer };
+export type SaveFile = { name: string; content: string; baseRevision: number; sharedUpdate?: ArrayBuffer };
+export type SaveResult = { savedAt: number; files: Array<{ name: string; revision: number; sharedState?: ArrayBuffer }> };
 export type SaveErrorInfo = { message: string; retry: boolean };
 
 export type SaveStatus =
@@ -36,6 +38,7 @@ export type SyncSnapshot = {
 export type RemoteChange = { name: string; content: string | null };
 
 type Entry = {
+  doc?: Y.Doc;
   local: string;
   /** Last server state the local text is based on; content null = not on the server. */
   base: { revision: number; content: string | null };
@@ -82,6 +85,7 @@ export class WorkspaceSync {
     this.savedAt = options.savedAt;
     for (const file of options.initialFiles) {
       this.entries.set(file.name, {
+        doc: file.sharedState ? sharedDocument(file.content, file.sharedState) : undefined,
         local: file.content,
         base: { revision: file.revision, content: file.content },
         inFlight: null,
@@ -101,6 +105,8 @@ export class WorkspaceSync {
     return this.entries.get(name)?.local ?? null;
   }
 
+  sharedText(name: string): Y.Text | null { return this.entries.get(name)?.doc?.getText("code") ?? null; }
+
   has(name: string): boolean {
     return this.entries.has(name);
   }
@@ -114,6 +120,7 @@ export class WorkspaceSync {
   edit(name: string, content: string): void {
     const entry = this.entries.get(name);
     if (entry === undefined || entry.local === content) return;
+    if (entry.doc) replaceSharedText(entry.doc, content);
     entry.local = content;
     this.error = null;
     this.schedule();
@@ -126,7 +133,7 @@ export class WorkspaceSync {
       this.edit(name, content);
       return;
     }
-    this.entries.set(name, { local: content, base: { revision: 0, content: null }, inFlight: null });
+    this.entries.set(name, { doc: sharedDocument(content), local: content, base: { revision: 0, content: null }, inFlight: null });
     this.error = null;
     this.schedule();
     this.refresh();
@@ -141,8 +148,15 @@ export class WorkspaceSync {
       const base = { revision: server.revision, content: server.content };
       const entry = this.entries.get(server.name);
       if (entry === undefined) {
-        this.entries.set(server.name, { local: server.content, base, inFlight: null });
+        this.entries.set(server.name, { doc: server.sharedState ? sharedDocument(server.content, server.sharedState) : undefined, local: server.content, base, inFlight: null });
         changes.push({ name: server.name, content: server.content });
+        continue;
+      }
+      if (entry.doc && server.sharedState) {
+        if (server.revision < entry.base.revision) continue;
+        Y.applyUpdate(entry.doc, new Uint8Array(server.sharedState));
+        entry.local = entry.doc.getText("code").toString();
+        entry.base = base;
         continue;
       }
       if (entry.base.revision === server.revision && entry.base.content === server.content) continue;
@@ -258,12 +272,20 @@ export class WorkspaceSync {
           name,
           content: entry.inFlight!,
           baseRevision: entry.base.revision,
+          ...(entry.doc ? { sharedUpdate: Uint8Array.from(Y.encodeStateAsUpdate(entry.doc)).buffer } : {}),
         })),
       );
       for (const saved of result.files) {
         const entry = this.entries.get(saved.name);
         if (entry?.inFlight != null) {
-          entry.base = { revision: saved.revision, content: entry.inFlight };
+          if (entry.doc && saved.sharedState) {
+            // Merge the acknowledgement without discarding edits made in flight.
+            const server = sharedDocument("", saved.sharedState);
+            Y.applyUpdate(entry.doc, new Uint8Array(saved.sharedState));
+            entry.local = entry.doc.getText("code").toString();
+            entry.base = { revision: saved.revision, content: server.getText("code").toString() };
+            server.destroy();
+          } else entry.base = { revision: saved.revision, content: entry.inFlight };
         }
       }
       this.savedAt = Math.max(this.savedAt ?? 0, result.savedAt);

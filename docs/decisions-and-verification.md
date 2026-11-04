@@ -1,6 +1,6 @@
 # Decisions and Verification Register
 
-[Documentation index](README.md). Updated October 28, 2026. These are unresolved choices and evidence gaps, not proposed additional features. The documentation describes agreed scope; it does not imply implementation readiness.
+[Documentation index](README.md). Updated October 27, 2026. These are unresolved choices and evidence gaps, not proposed additional features. The documentation describes agreed scope; it does not imply implementation readiness.
 
 ## Resolved
 
@@ -42,12 +42,17 @@ Resolved on October 28, 2026 by the club (the admins who run CodeCS are high sch
 | D16 | The basic program is **6 weeks**, one lesson a week: Python Fundamentals has 6 days, and Functions folded into Day 6 (“Lists and functions”). |
 | D17 | The admin area works on phones (375 px wide) as well as the 1366×768 Chromebook layout, because admins look up assignments on their phones. Breakpoints are in [UI design](ui-design.md#responsive-breakpoints). The student side stays Chromebook-first; the login page also works on a phone. |
 
+Resolved on October 27, 2026 by the project owner:
+
+| ID | Decision |
+| --- | --- |
+| D03 | CSV exports with a header row; map first name, last name and optional existing login code. Returning students match by existing login code only; names never automatically merge identities. Every new student is explicitly marked new. Select the target group/curriculum, preview all rows and conflicts, then commit. |
+
 ## Product decisions requiring input
 
 | ID | Decision | Needed before |
 | --- | --- | --- |
 | D02 | Forgotten-password recovery and in-app admin provisioning (interim: the developer creates admins with `npx convex run admins:createAdmin`) | Release |
-| D03 | Spreadsheet columns/formats and stable returning-student match key | Roster import; avoid merging same-name people |
 | D04 | Future lessons available immediately versus admin release | Publication/student day list |
 | D08 | Published edits applied to existing work and any re-evaluation | Versioned assignment publication |
 | D12 | Frontend provider, domain choice, and account ownership | Release |

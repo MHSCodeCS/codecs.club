@@ -19,8 +19,8 @@ export const metadata: Metadata = {
   description: "Python learning workspace for the basic and advanced groups.",
 };
 
-// Applies the saved theme before first paint so there is no light/dark flash.
-const themeScript = `(function(){try{var t=localStorage.getItem(${JSON.stringify(
+// The welcome page follows the OS; elsewhere apply the saved theme before first paint.
+const themeScript = `(function(){try{if(location.pathname==="/")return;var t=localStorage.getItem(${JSON.stringify(
   THEME_STORAGE_KEY,
 )});if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
 

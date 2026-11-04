@@ -1,3 +1,4 @@
+import { writableClass } from "./lib/classes";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
@@ -62,6 +63,7 @@ export const prepare = mutation({
   }),
   handler: async (ctx, args) => {
     const { userId, workspace } = await requireOwnWorkspace(ctx, args.workspaceId);
+    await writableClass(ctx, workspace.group);
     const revision = await guidedRevision(ctx, workspace);
     const files = snapshot(await workingFiles(ctx, workspace._id));
     const latest = await latestVersion(ctx, workspace._id);
@@ -113,6 +115,7 @@ export const record = mutation({
   }),
   handler: async (ctx, args) => {
     const { userId, workspace } = await requireOwnWorkspace(ctx, args.workspaceId);
+    await writableClass(ctx, workspace.group);
     const version = await ctx.db.get("workVersions", args.versionId);
     if (version === null || version.workspaceId !== workspace._id) {
       throw appError("NOT_FOUND", "That version of your work wasn’t found.");

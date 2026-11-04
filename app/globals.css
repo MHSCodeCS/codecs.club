@@ -156,7 +156,30 @@
 }
 
 @media print {
+  body:has(.login-tickets) { height: auto; background: white; color: black; }
+  body:has(.login-tickets) > :not(.login-tickets) {
+    display: none !important;
+  }
+  .login-tickets[open] {
+    position: static;
+    display: block;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: black;
+    background: white;
+  }
+  .login-tickets::backdrop { display: none; }
+  .ticket-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12mm 6mm; }
+  .login-ticket { break-inside: avoid; border: 1px dashed #777; color: black; background: white; }
   .no-print {
     display: none !important;
   }
 }
+
+.peer-cursor { position: relative; border-left: 2px solid; margin-left: -1px; pointer-events: none; }
+.peer-cursor-label { position: absolute; top: -1.3em; left: -2px; z-index: 5; padding: 1px 4px; border-radius: 3px; color: #161a18; font: 10px/1.2 sans-serif; white-space: nowrap; }

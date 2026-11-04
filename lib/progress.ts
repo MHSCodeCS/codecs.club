@@ -9,6 +9,8 @@ export type AssignmentProgress = {
   started: boolean;
   savedAt: number | null;
   turnedIn: boolean;
+  reviewed?: boolean;
+  reviewDecision?: "complete" | "needsWork" | null;
   latestOutcome: "complete" | "partial" | "none" | null;
 };
 
@@ -56,4 +58,21 @@ export function assignmentStatus(a: AssignmentProgress): {
   if (a.turnedIn) return { label: "Turned in", tone: "turnedIn" };
   if (a.started) return { label: "In progress", tone: "progress" };
   return { label: "Not started", tone: "notStarted" };
+}
+
+/** Teacher decisions determine completion; everything pending stays yellow. */
+export function assignmentColor(a: AssignmentProgress): "mint" | "amb" | "cor" {
+  if (a.reviewed && a.reviewDecision === "needsWork") return "cor";
+  if (a.reviewed && a.reviewDecision === "complete") return "mint";
+  return "amb";
+}
+
+export function assignmentFill(assignments: AssignmentProgress[], soft = false): string | undefined {
+  if (!assignments.length) return undefined;
+  const stops = assignments.flatMap((a, i) => {
+    const tone = assignmentColor(a);
+    const color = `var(--${tone}${soft ? "-s" : tone === "cor" ? "-i" : ""})`;
+    return [`${color} ${i * 100 / assignments.length}%`, `${color} ${(i + 1) * 100 / assignments.length}%`];
+  });
+  return `linear-gradient(to right, ${stops.join(", ")})`;
 }

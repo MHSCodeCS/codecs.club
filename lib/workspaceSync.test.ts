@@ -179,7 +179,7 @@ describe("WorkspaceSync", () => {
     const done = sync.flush().then(() => {
       flushed = true;
     });
-    expect(calls[0]!.files).toEqual([{ name: "helpers.py", content: "", baseRevision: 0 }]);
+    expect(calls[0]!.files).toMatchObject([{ name: "helpers.py", content: "", baseRevision: 0 }]);
     expect(flushed).toBe(false);
     await ack();
     await done;

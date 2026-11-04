@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { FieldError, TextInput } from "@/components/ui/Field";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { THEME_STORAGE_KEY } from "@/lib/theme";
 import { errorMessage } from "@/lib/errors";
 import { LoginTicket } from "./LoginTicket";
 import { homeFor, useViewer } from "./useViewer";
@@ -13,6 +13,26 @@ import { homeFor, useViewer } from "./useViewer";
 export function LoginScreen() {
   const state = useViewer();
   const router = useRouter();
+  const [showTeacherSignIn, setShowTeacherSignIn] = useState(false);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.getAttribute("data-theme");
+    root.removeAttribute("data-theme");
+    return () => {
+      let saved = previous;
+      try { saved = localStorage.getItem(THEME_STORAGE_KEY); } catch {}
+      if (saved === "light" || saved === "dark") root.setAttribute("data-theme", saved);
+      else root.removeAttribute("data-theme");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (showTeacherSignIn) {
+      document.getElementById("teacher-sign-in")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      document.getElementById("admin-username")?.focus({ preventScroll: true });
+    }
+  }, [showTeacherSignIn]);
 
   useEffect(() => {
     if (state.status === "signedIn") router.replace(homeFor(state.viewer.role));
@@ -20,10 +40,13 @@ export function LoginScreen() {
 
   return (
     <div className="flex min-h-full flex-col bg-bg">
-      <header className="flex h-[68px] flex-none items-center gap-4 px-4 sm:px-6 lg:px-24">
-        <span className="text-[22px] leading-none font-extrabold tracking-[-.03em]">CodeCS</span>
+      <header className="flex h-[68px] flex-none items-center gap-3 px-4 sm:px-6 lg:px-24">
+        <span className="text-[22px] font-extrabold tracking-[-.03em] text-ink">CodeCS</span>
+        <Button type="button" variant="secondary" onClick={() => {
+          setShowTeacherSignIn(true);
+          document.getElementById("admin-username")?.focus();
+        }} aria-expanded={showTeacherSignIn} aria-controls={showTeacherSignIn ? "teacher-sign-in" : undefined}>Admin sign in</Button>
         <span className="ml-auto font-mono text-[13px] font-medium text-ink3 max-sm:hidden">codecs.club</span>
-        <ThemeToggle className="max-sm:[&>button]:h-10" />
       </header>
       <main className="grid flex-1 items-center gap-12 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_460px] lg:gap-[72px] lg:px-24">
         <StudentSignIn />
@@ -38,7 +61,7 @@ export function LoginScreen() {
           <p className="m-0 text-sm text-ink2">Lost your ticket? Ask at the club and we’ll print a new one.</p>
         </aside>
       </main>
-      <AdminSignIn />
+      {showTeacherSignIn && <AdminSignIn />}
     </div>
   );
 }
@@ -74,7 +97,7 @@ function StudentSignIn() {
   return (
     <form onSubmit={onSubmit} noValidate className="flex max-w-[600px] flex-col gap-[22px]">
       <h1 className="m-0 text-[clamp(52px,6.4vw,88px)] leading-[1.04] font-extrabold tracking-[-.035em]">
-        Sign in
+        Welcome
       </h1>
       <p className="m-0 text-[19px] leading-[1.55] text-pretty text-ink2">
         Type the login code from your ticket. It’s your first initial and last name, like{" "}
@@ -148,7 +171,7 @@ function AdminSignIn() {
   }
 
   return (
-    <footer className="mx-4 mb-6 flex-none rounded-[20px] bg-sf px-4 pt-[18px] pb-5 sm:mx-6 sm:px-6">
+    <footer id="teacher-sign-in" className="mx-6 mb-6 flex-none rounded-[20px] bg-sf px-6 pt-[18px] pb-5">
       <form
         onSubmit={onSubmit}
         noValidate

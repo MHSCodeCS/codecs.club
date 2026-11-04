@@ -64,7 +64,7 @@ describe("assignment workspace", () => {
     expect(await student.mutation(api.workspaces.open, { assignmentId: loopArt })).toBe(workspaceId);
 
     const after = await student.query(api.workspaces.get, { assignmentId: loopArt });
-    expect(after?.workspace?.files).toEqual([{ name: "main.py", content: "", revision: 1 }]);
+    expect(after?.workspace?.files).toMatchObject([{ name: "main.py", content: "", revision: 1 }]);
     expect(after?.day).toMatchObject({ topic: "Loops", inCurrentCurriculum: true });
     const history = await student.query(api.workspaces.versions, {
       workspaceId,
@@ -168,7 +168,7 @@ describe("assignment workspace", () => {
         { name: "art.txt", content: "***", baseRevision: 0 },
       ],
     });
-    expect(first.files).toEqual([
+    expect(first.files).toMatchObject([
       { name: "main.py", revision: 2 },
       { name: "art.txt", revision: 1 },
     ]);

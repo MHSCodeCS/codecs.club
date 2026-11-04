@@ -36,6 +36,8 @@ import { renderInlineMarkdown } from "@/lib/inlineMarkdown";
 import { ENTRY_FILE } from "@/lib/python/config";
 import { chooseEntry } from "@/lib/python/runner";
 import type { WorkspaceSync } from "@/lib/workspaceSync";
+import { SharedRun } from "./AssistanceInfo";
+import { useAssistancePresence, peerCursors } from "./useAssistancePresence";
 import { CheckPanel } from "./CheckPanel";
 import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
 import { OutputPanel } from "./OutputPanel";
@@ -52,14 +54,14 @@ type WorkspaceData = NonNullable<FunctionReturnType<typeof api.workspaces.get>>;
 type LoadedWorkspace = WorkspaceData & { workspace: NonNullable<WorkspaceData["workspace"]> };
 type Message = { tone: "info" | "error"; text: string };
 
-const LATER = "Not available yet.";
+
 
 /**
  * 4d. Assignment workspace: the task beside a Python editor whose files save
  * to Convex as the student types, and Run executes them in Python in the
  * browser. Guided work can be checked against the task, and Turn in sends a
  * saved snapshot for review. Opening an assignment the first time copies its
- * published starter files. Help comes later.
+ * published starter files. Assistance shares edits, teacher cursors, guidance and attributed teacher runs.
  */
 export function Workspace({ assignmentId }: { assignmentId: string }) {
   const data = useQuery(api.workspaces.get, { assignmentId });
@@ -114,6 +116,10 @@ function WorkspaceScreen({ data }: { data: LoadedWorkspace }) {
   const { assignment, day, workspace, timeZone } = data;
   const { sync, snapshot } = useWorkspaceSync(workspace);
   const { runtime, py } = usePythonRuntime(workspace._id);
+  const assistance = useQuery(api.assistance.detail, { workspaceId: workspace._id });
+  const presence = useAssistancePresence(workspace._id, sync);
+  const requestHelp = useMutation(api.assistance.requestHelp);
+  const [requestingHelp, setRequestingHelp] = useState(false);
   const guardLeave = useLeaveGuard(sync);
   const restoreVersion = useMutation(api.workspaces.restore);
   const prepareCheck = useMutation(api.checks.prepare);
@@ -230,6 +236,7 @@ function WorkspaceScreen({ data }: { data: LoadedWorkspace }) {
 
   return (
     <div className="flex h-dvh min-h-[600px] flex-col bg-bg">
+      {data.archived && <p className="bg-amb-s px-5 py-2 font-bold">Archived class · This work is read-only.</p>}
       <ConnectionWatcher sync={sync} />
       <header className="flex h-[62px] flex-none items-center gap-3 px-5">
         <Link
@@ -243,9 +250,9 @@ function WorkspaceScreen({ data }: { data: LoadedWorkspace }) {
         <Link
           href={dayHref}
           onNavigate={guardLeave(dayHref)}
-          className="text-[15px] font-semibold whitespace-nowrap text-ink2 no-underline"
+          className="min-w-0 max-w-[300px] text-[15px] font-semibold text-ink2 no-underline"
         >
-          Day {day.order}: {day.topic}
+          <span className="block truncate">Day {day.order}: {day.topic}</span>
         </Link>
         <span aria-hidden="true" className="text-bd">
           /
@@ -257,14 +264,17 @@ function WorkspaceScreen({ data }: { data: LoadedWorkspace }) {
           <AssignmentTypeTag type={assignment.type} />
         </span>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2 [&>span]:self-center">
           <SaveStatusPill
             status={snapshot.status}
             timeZone={timeZone}
             onRetry={() => void sync.flush().catch(() => {})}
           />
-          <Button variant="secondary" size="md" disabled title={LATER}>
-            Ask for help
+          <Button variant={assistance?.helpId ? "warning" : "secondary"} className={assistance?.helpId ? "disabled:bg-amb disabled:text-on-amb disabled:opacity-100" : undefined} size="md" loading={requestingHelp} disabled={Boolean(assistance?.helpId)} onClick={() => {
+            setRequestingHelp(true);
+            void requestHelp({ workspaceId: workspace._id }).catch(err => setMessage({ tone: "error", text: errorMessage(err) })).finally(() => setRequestingHelp(false));
+          }}>
+            {assistance?.helpId ? "Help requested" : "Ask for help"}
           </Button>
           {day.slidesUrl && (
             <ButtonLink href={day.slidesUrl} external variant="ghost" size="md">
@@ -272,12 +282,13 @@ function WorkspaceScreen({ data }: { data: LoadedWorkspace }) {
             </ButtonLink>
           )}
           <span className="ml-1 flex items-center gap-2">
-            <Avatar name={viewer.name} size={30} className="text-[11px]" />
+            <Avatar color={viewer.avatarColor} name={viewer.name} size={30} className="text-[11px]" />
             <b className="text-sm font-bold">{firstName}</b>
           </span>
         </div>
       </header>
 
+      {presence.failure && <p role="status" className="mx-5 mb-2 text-sm text-amb-i">{presence.failure}</p>}
       <div className="grid min-h-0 flex-1 grid-cols-[372px_minmax(0,1fr)] gap-3 px-3 pb-3">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-[20px] bg-sf">
           <Tabs
@@ -325,7 +336,6 @@ function WorkspaceScreen({ data }: { data: LoadedWorkspace }) {
             workspaceId={workspace._id}
             timeZone={timeZone}
             sync={sync}
-            unsavedChanges={snapshot.files.some((f) => f.dirty)}
           />
         </aside>
 
@@ -386,19 +396,23 @@ function WorkspaceScreen({ data }: { data: LoadedWorkspace }) {
               fileName={shownFile}
               readContent={(name) => sync.content(name)}
               onChange={(name, content) => sync.edit(name, content)}
-              readOnly={restoring}
+              readOnly={restoring || data.archived}
+              sharedText={name => sync.sharedText(name)}
+              onCursor={presence.onCursor}
+              remoteCursors={peerCursors(assistance?.cursors ?? [], presence.identity, shownFile, sync)}
             />
           </div>
 
+          {assistance?.remote && <div className="max-h-48 overflow-auto"><SharedRun remote={assistance.remote} /></div>}
           <div className="grid h-[232px] flex-none grid-cols-2 bg-code-bar">
             <OutputPanel runtime={runtime} py={py} />
             <CheckPanel
+              unsavedChanges={snapshot.files.some((f) => f.dirty)}
               workspaceId={workspace._id}
               guided={assignment.type === "guided"}
               timeZone={timeZone}
               checking={checking}
               canCheck={py.status.kind === "ready"}
-              unsavedChanges={snapshot.files.some((f) => f.dirty)}
               onCheck={() => void runCheck()}
               error={checkError}
             />
@@ -421,11 +435,6 @@ function TaskPanel({ assignment }: { assignment: LoadedWorkspace["assignment"] }
           <pre className="m-0 overflow-auto rounded-[14px] bg-bg px-3.5 py-3 font-mono text-sm leading-normal font-medium">
             {assignment.expectedOutput}
           </pre>
-          {assignment.type === "guided" && (
-            <span className="text-[12.5px] text-ink3">
-              Spaces and line breaks don’t affect the check.
-            </span>
-          )}
         </div>
       )}
     </>

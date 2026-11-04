@@ -1,232 +1,78 @@
 "use client";
 
+import { usePaginatedQuery, useQuery } from "convex/react";
 import { useState } from "react";
-import { buttonClasses } from "@/components/ui/Button";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { CodeView } from "@/components/ui/CodeView";
 import { Pill } from "@/components/ui/Pill";
-import { PreviewBanner } from "@/components/ui/PreviewBanner";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { EmptyState, LoadingState } from "@/components/ui/States";
 import { cn } from "@/lib/cn";
-import {
-  FIXTURE_TIME_ZONE as TZ,
-  myWorkFixture,
-  type WorkItem,
-  type WorkStatus,
-} from "@/lib/fixtures";
-import {
-  formatShortDate,
-  formatWeekdayDate,
-  formatWeekdayDateTime,
-  formatYear,
-} from "@/lib/format";
+import { formatWeekdayDateTime, formatYear } from "@/lib/format";
 
-/** 4e. Every saved piece of work across years and curriculum changes. */
+type Work = typeof api.myWork.list._returnType.page[number];
+
+/** Saved personal work, with its original year/group/curriculum context. */
 export function MyWork() {
-  const groups = myWorkFixture;
-  const years = groups.map((g) => g.year);
-  const [year, setYear] = useState<string>("all");
-  const [selectedId, setSelectedId] = useState<string>("nametag");
-  const visible = year === "all" ? groups : groups.filter((g) => g.year === year);
-  const selected = groups.flatMap((g) => g.items).find((i) => i.id === selectedId) ?? null;
-
-  return (
-    <main className="flex flex-col pb-10">
-      <div className="flex flex-wrap items-end gap-5 px-6 pt-4 lg:px-10">
-        <h1 className="m-0 text-[clamp(40px,4.3vw,58px)] leading-[1.04] font-extrabold tracking-[-.035em]">
-          My work
-        </h1>
-        <SegmentedControl
-          label="Year"
-          className="mb-1.5 ml-auto bg-sf"
-          options={[
-            { value: "all", label: "All years" },
-            ...years.map((y) => ({ value: y, label: formatYear(y) })),
-          ]}
-          value={year}
-          onChange={setYear}
-        />
-      </div>
-      <PreviewBanner phase="Phase 2" className="mx-6 mt-3 lg:mx-10" />
-
-      <div className="grid gap-6 px-6 pt-[22px] lg:grid-cols-[minmax(0,1fr)_452px] lg:px-10">
-        <section aria-label="Work list" className="flex flex-col gap-0.5">
-          {visible.map((group, gi) => (
-            <div key={group.year} className={cn("flex flex-col gap-0.5", gi > 0 && "mt-3.5")}>
-              <div className="flex items-center gap-2.5 px-3.5 pb-1.5">
-                <b className="text-[15px] font-bold">{group.label}</b>
-                {group.current ? (
-                  <Pill tone="mint" className="px-2.5 font-semibold">
-                    Current
-                  </Pill>
-                ) : (
-                  <span className="text-[13px] text-ink3">previous curriculum</span>
-                )}
-              </div>
-              {group.items.map((item) => (
-                <WorkRow
-                  key={item.id}
-                  item={item}
-                  selected={item.id === selectedId}
-                  onSelect={() => setSelectedId(item.id)}
-                />
-              ))}
-            </div>
-          ))}
-        </section>
-        {selected && <WorkDetail item={selected} />}
-      </div>
-    </main>
-  );
-}
-
-function statusPill(status: WorkStatus) {
-  switch (status.kind) {
-    case "inProgress":
-      return (
-        <Pill tone="amber" className="h-[26px] px-2.5 text-[13px] font-semibold">
-          ◐ In progress · saved today
-        </Pill>
-      );
-    case "notTurnedIn":
-      return (
-        <Pill tone="amber" className="h-[26px] px-2.5 text-[13px]">
-          ! Not turned in
-        </Pill>
-      );
-    case "turnedIn":
-      return (
-        <Pill className="h-[26px] px-2.5 text-[13px] font-semibold">✓ Turned in · not reviewed</Pill>
-      );
-    case "reviewed":
-      return (
-        <Pill tone="violet" className="h-[26px] px-2.5 text-[13px] font-semibold">
-          {status.hasNote
-            ? "Reviewed · has a note"
-            : `Reviewed ${formatShortDate(status.reviewedAt, TZ)}`}
-        </Pill>
-      );
+  const { results, status, loadMore } = usePaginatedQuery(api.myWork.list, {}, { initialNumItems: 20 });
+  const [selectedId, setSelectedId] = useState<Id<"workspaces"> | null>(null);
+  const selected = results.find(w => w._id === selectedId) ?? results[0];
+  const groups = new Map<string, Work[]>();
+  for (const work of results) {
+    const key = `${work.year}:${work.group}:${work.curriculumId}`;
+    const group = groups.get(key) ?? []; group.push(work); groups.set(key, group);
   }
+  return <main className="flex flex-col pb-10">
+    <h1 className="mx-6 mt-4 mb-0 text-[clamp(40px,4.3vw,58px)] font-extrabold tracking-[-.035em] lg:mx-10">My work</h1>
+    <p className="mx-6 mt-2 text-sm text-ink3 lg:mx-10">Your saved work across every year and curriculum. Past work stays available to open and edit.</p>
+    {status === "LoadingFirstPage" ? <LoadingState label="Loading your work…" /> : results.length === 0 ? <EmptyState title="No saved work yet" className="mx-6"><p>Open an assignment from Learning home to get started.</p><ButtonLink href="/learn" variant="primary">Learning home</ButtonLink></EmptyState> : <div className="grid gap-6 px-6 pt-2 lg:grid-cols-[minmax(0,1fr)_452px] lg:px-10">
+      <section aria-label="Work list" className="flex min-w-0 flex-col gap-5">
+        {[...groups.entries()].map(([key, items]) => <section key={key}>
+          <div className="mb-2 flex flex-wrap items-center gap-2 px-3.5"><h2 className="m-0 text-[15px] font-bold">{formatYear(items[0].year)} · {items[0].group} · {items[0].curriculumName}</h2>{items[0].current ? <Pill>Current</Pill> : <span className="text-xs text-ink3">Previous curriculum / year</span>}</div>
+          {items.map(item => <div key={item._id} className={cn("flex flex-wrap items-center gap-3 rounded-2xl p-3.5", selected?._id === item._id ? "bg-mint-s" : "hover:bg-sf")}>
+            <button type="button" aria-pressed={selected?._id === item._id} onClick={() => setSelectedId(item._id)} className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 text-left text-ink"><b>{item.title}</b><span className="block text-[13px] text-ink3">Day {item.dayOrder} · {item.topic} · {item.type === "guided" ? "guided" : "open-ended"}</span><span className="block text-xs text-ink3">Saved {formatWeekdayDateTime(item.updatedAt, item.timeZone)}</span></button>
+            <Pill tone={item.latestAttempt?.reviewDecision === "needsWork" ? "coral" : item.latestAttempt?.reviewDecision === "complete" ? "mint" : item.latestAttempt?.status === "reviewed" ? "violet" : item.latestAttempt ? "mint" : "amber"}>{item.latestAttempt?.reviewDecision === "needsWork" ? "Needs Work" : item.latestAttempt?.reviewDecision === "complete" ? "Done" : item.latestAttempt?.status === "reviewed" ? "Reviewed" : item.latestAttempt ? "Turned in · awaiting review" : "In progress · not turned in"}</Pill>
+            <ButtonLink href={`/learn/assignments/${item.assignmentId}`} variant={item.latestAttempt ? "secondary" : "primary"}>{item.latestAttempt ? "Open work" : "Resume"}</ButtonLink>
+          </div>)}
+        </section>)}
+        {status !== "Exhausted" && <Button loading={status === "LoadingMore"} loadingLabel="Loading…" onClick={() => loadMore(20)}>Load more work</Button>}
+      </section>
+      {selected && <WorkDetail key={selected._id} item={selected} />}
+    </div>}
+  </main>;
 }
 
-function WorkRow({
-  item,
-  selected,
-  onSelect,
-}: {
-  item: WorkItem;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const resume = item.status.kind === "inProgress";
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-current={selected || undefined}
-      className={cn(
-        "grid cursor-pointer grid-cols-[minmax(0,1fr)_262px_92px] items-center gap-3 rounded-[14px] border-0 px-3.5 py-[11px] text-left",
-        selected ? "bg-mint-s" : "bg-transparent hover:bg-sf",
-      )}
-    >
-      <div className="min-w-0">
-        <b className="font-bold">{item.title}</b>
-        <div className="text-[13px] text-ink3">{item.context}</div>
-      </div>
-      {statusPill(item.status)}
-      <span
-        className={buttonClasses(
-          resume ? "primary" : "secondary",
-          "md",
-          cn("w-full", selected && !resume && "bg-bg"),
-        )}
-      >
-        {resume ? "Resume" : "Open"}
-      </span>
-    </button>
-  );
+function WorkDetail({ item }: { item: Work }) {
+  const { results, status, loadMore } = usePaginatedQuery(api.myWork.attempts, { workspaceId: item._id }, { initialNumItems: 10 });
+  const [submissionId, setSubmissionId] = useState<Id<"submissions"> | null>(null);
+  const selected = results.find(a => a._id === submissionId);
+  return <aside aria-label="Selected work" className="flex min-w-0 flex-col gap-4 self-start rounded-3xl bg-sf p-6">
+    <div className="text-sm text-ink3">{formatYear(item.year)} · {item.group} · {item.curriculumName}<br />Day {item.dayOrder}: {item.topic}</div>
+    <h2 className="m-0 text-3xl font-extrabold">{item.title}</h2>
+    <ButtonLink variant="primary" href={`/learn/assignments/${item.assignmentId}`}>Open working copy</ButtonLink>
+    <h3 className="m-0 text-lg font-bold">Submission history</h3>
+    {status === "LoadingFirstPage" ? <LoadingState label="Loading attempts…" /> : results.length === 0 ? <p className="m-0 text-sm text-ink3">Not turned in yet. Your working copy is saved.</p> : <ol className="m-0 flex list-none flex-col gap-4 p-0">{results.map(a => <li key={a._id} className="rounded-2xl bg-bg p-4">
+      {a.reviewDecision && <Pill tone={a.reviewDecision === "needsWork" ? "coral" : "mint"}>{a.reviewDecision === "needsWork" ? "Needs Work" : "Done"}</Pill>}
+      <b>Attempt {a.attempt} · version {a.version}</b><div className="text-xs text-ink3">Turned in {formatWeekdayDateTime(a.submittedAt, item.timeZone)}</div>
+      <p className="my-2 text-sm">{a.status === "reviewed" ? `Reviewed by ${a.reviewer ?? "an admin"}${a.reviewedAt ? ` · ${formatWeekdayDateTime(a.reviewedAt, item.timeZone)}` : ""}` : a.status === "superseded" ? "Superseded by a newer attempt" : "Waiting for review"}<br />Check: {a.outcome === "complete" ? "Completion" : a.outcome === "partial" ? "Partial completion" : a.outcome === "none" ? "No completion" : "Not checked"}</p>
+      {a.feedback.map((note, i) => <blockquote key={i} className="mx-0 rounded-xl bg-vio-s p-3 text-sm"><b className="block">Note from {note.author}</b><span className="whitespace-pre-wrap">{note.body}</span></blockquote>)}
+      <Button size="sm" aria-pressed={submissionId === a._id} onClick={() => setSubmissionId(submissionId === a._id ? null : a._id)}>View attempt {a.attempt}</Button>
+    </li>)}</ol>}
+    {status !== "Exhausted" && status !== "LoadingFirstPage" && <Button loading={status === "LoadingMore"} onClick={() => loadMore(10)}>Older attempts</Button>}
+    {selected && <SubmittedSnapshot key={selected._id} submissionId={selected._id} attempt={selected.attempt} />}
+  </aside>;
 }
 
-function WorkDetail({ item }: { item: WorkItem }) {
-  const detail = item.detail;
-  return (
-    <aside
-      aria-label="Selected work"
-      className="flex flex-col gap-4 self-start rounded-[24px] bg-sf px-6 py-[22px]"
-    >
-      <div>
-        <div className="text-[13px] text-ink3">{detail?.heading ?? item.context}</div>
-        <h2 className="m-0 mt-1 text-[34px] leading-[1.1] font-extrabold tracking-[-.035em]">
-          {item.title}
-        </h2>
-      </div>
-      {detail ? (
-        <>
-          <ol className="m-0 flex list-none flex-col gap-3.5 p-0">
-            {detail.attempts.map((attempt) => (
-              <li key={attempt.attempt} className="contents">
-                <TimelineStep marker={String(attempt.attempt)} tone="mint">
-                  <b className="font-bold">Turned in</b>
-                  <div className="text-[13px] text-ink3">
-                    {formatWeekdayDateTime(attempt.submittedAt, TZ)} · version {attempt.version}
-                    {attempt.check && ` · check: ${attempt.check}`}
-                  </div>
-                </TimelineStep>
-                {attempt.review && (
-                  <TimelineStep marker="✓" tone="violet">
-                    <b className="font-bold">Reviewed by {attempt.review.by}</b>
-                    <div className="text-[13px] text-ink3">
-                      {formatWeekdayDate(attempt.review.at, TZ)}
-                    </div>
-                    {attempt.review.note && (
-                      <div className="mt-2.5 rounded-[14px] bg-bg px-3.5 py-3 text-sm">
-                        <span className="mb-0.5 block text-xs font-bold text-vio-i">
-                          Note from {attempt.review.by}
-                        </span>
-                        “{attempt.review.note}”
-                      </div>
-                    )}
-                  </TimelineStep>
-                )}
-              </li>
-            ))}
-          </ol>
-          <p className="m-0 text-[13px] text-ink2">
-            You can open, edit and turn this in again anytime.
-          </p>
-          <div className="flex gap-2.5">
-            <span className={buttonClasses("primary", "lg", "h-[42px]")}>Open work</span>
-            <span className={buttonClasses("secondary", "lg", "h-[42px] bg-bg")}>
-              View attempt {detail.attempts.length}
-            </span>
-          </div>
-        </>
-      ) : (
-        <p className="m-0 text-sm text-ink3">Select reviewed work to see its attempts and notes.</p>
-      )}
-    </aside>
-  );
-}
-
-function TimelineStep({
-  marker,
-  tone,
-  children,
-}: {
-  marker: string;
-  tone: "mint" | "violet";
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="grid grid-cols-[28px_minmax(0,1fr)] gap-3">
-      <span
-        aria-hidden="true"
-        className={cn(
-          "grid size-7 place-items-center rounded-full text-[13px] font-extrabold",
-          tone === "mint" ? "bg-mint text-on-mint" : "bg-vio text-on-vio",
-        )}
-      >
-        {marker}
-      </span>
-      <div>{children}</div>
-    </div>
-  );
+function SubmittedSnapshot({ submissionId, attempt }: { submissionId: Id<"submissions">; attempt: number }) {
+  const files = useQuery(api.myWork.submittedFiles, { submissionId });
+  const [fileName, setFileName] = useState<string | null>(null);
+  if (files === undefined) return <LoadingState label="Loading submitted version…" />;
+  if (!files) return <p role="alert">This submitted version is unavailable.</p>;
+  const selected = files.find(f => f.name === fileName) ?? files[0];
+  return <section aria-label={`Attempt ${attempt} submitted snapshot`} className="min-w-0 overflow-hidden rounded-xl border border-bd">
+    <h3 className="m-0 p-3 text-sm font-bold">Attempt {attempt} · submitted snapshot · read-only</h3>
+    <div className="flex flex-wrap gap-1 px-3 pb-3">{files.map(f => <Button key={f.name} size="sm" variant={selected?.name === f.name ? "primary" : "secondary"} aria-pressed={selected?.name === f.name} onClick={() => setFileName(f.name)}>{f.name}</Button>)}</div>
+    {selected && (selected.name.endsWith(".py") ? <CodeView code={selected.content} label={`Submitted ${selected.name}`} className="max-h-96" /> : <pre className="m-0 max-h-96 overflow-auto p-3 text-sm">{selected.content}</pre>)}
+  </section>;
 }

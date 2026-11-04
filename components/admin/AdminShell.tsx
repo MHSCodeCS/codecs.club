@@ -7,22 +7,25 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useSignOut } from "@/components/auth/RequireRole";
 import { useAdminViewer } from "@/components/auth/ViewerContext";
 import { Avatar } from "@/components/ui/Avatar";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/Pill";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { ProfileMenu } from "@/components/ui/ProfileMenu";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/cn";
+import { ClassArchive } from "./ClassArchive";
 import { GroupProvider, useGroup } from "./GroupContext";
+
+import { UnsavedWorkProvider, useConfirmLeave } from "./UnsavedWork";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   return (
-    <GroupProvider>
+    <UnsavedWorkProvider><GroupProvider>
       <div className="flex min-h-full flex-col bg-bg">
         <AdminHeader />
-        <div className="flex flex-1 flex-col">{children}</div>
+        <ClassContent>{children}</ClassContent>
       </div>
-    </GroupProvider>
+    </GroupProvider></UnsavedWorkProvider>
   );
 }
 
@@ -31,11 +34,12 @@ function badgeText(count: number) {
 }
 
 function AdminHeader() {
+  const confirmLeave = useConfirmLeave();
   const viewer = useAdminViewer();
   const signOut = useSignOut();
   const pathname = usePathname();
-  const { group, setGroup } = useGroup();
-  const badges = useQuery(api.adminNav.badges);
+  const { group, setGroup, classes } = useGroup();
+  const badges = useQuery(api.adminNav.badges, { group });
   // The menu belongs to the page it was opened on, so navigating closes it.
   const [menuOpenOn, setMenuOpenOn] = useState<string | null>(null);
   const menuOpen = menuOpenOn === pathname;
@@ -61,8 +65,17 @@ function AdminHeader() {
   const links: Array<{ href: string; label: string; badge?: ReactNode }> = [
     { href: "/admin/students", label: "Students" },
     { href: "/admin/curriculum", label: "Curriculum" },
-    { href: "/admin/assignments", label: "Assignments" },
-    { href: "/admin/assistance", label: "Assistance", badge: helpBadge },
+    {
+      href: "/admin/assistance",
+      label: "Classroom",
+      badge: badges && badges.openHelp > 0 && (
+        <Pill tone="amberSolid" className="h-5 px-[7px] font-extrabold">
+          <span className="sr-only">, </span>
+          {badgeText(badges.openHelp)}
+          <span className="sr-only"> waiting for help</span>
+        </Pill>
+      ),
+    },
     {
       href: "/admin/review",
       label: "Review",
@@ -77,12 +90,13 @@ function AdminHeader() {
     { href: "/admin/settings", label: "Settings" },
     { href: "/admin/history", label: "History" },
   ];
-  const isCurrent = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isCurrent = (href: string) => pathname === href || pathname.startsWith(`${href}/`) || (href === "/admin/curriculum" && pathname.startsWith("/admin/assignments"));
 
   const brand = (
     <span className="mr-4 flex items-center gap-2">
       <Link
         href="/admin/students"
+        onNavigate={e => { if (!confirmLeave()) e.preventDefault(); }}
         className="text-[21px] leading-none font-extrabold tracking-[-.03em] text-ink no-underline"
       >
         CodeCS
@@ -93,16 +107,10 @@ function AdminHeader() {
     </span>
   );
   const groupControl = (className: string) => (
-    <SegmentedControl
-      label="Group"
-      className={className}
-      options={[
-        { value: "basic", label: "basic" },
-        { value: "advanced", label: "advanced" },
-      ]}
-      value={group}
-      onChange={setGroup}
-    />
+    <select aria-label="Class" className={cn("h-11 max-w-full rounded-xl border border-bd bg-sf px-3 text-sm font-bold", className)} value={classes.some(c => c.group === group && c.status !== "archived") ? group : ""} onChange={e => setGroup(e.target.value)}>
+      <option value="" disabled>Select class</option>
+      {classes.filter(c => c.status !== "archived").map(c => <option key={c._id} value={c.group}>{c.name} · {c.year}{c.status === "upcoming" ? " · Upcoming" : ""}</option>)}
+    </select>
   );
 
   return (
@@ -117,6 +125,7 @@ function AdminHeader() {
               <Link
                 key={link.href}
                 href={link.href}
+                onNavigate={e => { if (!confirmLeave()) e.preventDefault(); }}
                 aria-current={current ? "page" : undefined}
                 className={cn(
                   "flex h-9 items-center gap-[7px] rounded-[10px] px-[11px] text-[14.5px] no-underline",
@@ -132,16 +141,8 @@ function AdminHeader() {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-2.5">
-          {/* A wrapper, because the toggle's own inline-flex would win over `hidden`. */}
-          <span className="hidden 2xl:inline-flex">
-            <ThemeToggle />
-          </span>
           {groupControl("bg-sf")}
-          <Avatar name={viewer.name} tone="violet" size={32} className="text-xs" />
-          <b className="text-sm font-bold whitespace-nowrap">{viewer.name}</b>
-          <Button variant="ghost" size="sm" className="h-[34px]" onClick={() => void signOut()}>
-            Sign out
-          </Button>
+          <ProfileMenu name={viewer.name} color={viewer.avatarColor} onSignOut={() => { if (confirmLeave()) void signOut(); }} />
         </div>
       </div>
 
@@ -184,6 +185,7 @@ function AdminHeader() {
                   <Link
                     key={link.href}
                     href={link.href}
+                onNavigate={e => { if (!confirmLeave()) e.preventDefault(); }}
                     aria-current={current ? "page" : undefined}
                     onClick={closeMenu}
                     className={cn(
@@ -204,7 +206,7 @@ function AdminHeader() {
               <Avatar name={viewer.name} tone="violet" size={32} className="text-xs" />
               <b className="mr-auto text-sm font-bold">{viewer.name}</b>
               <ThemeToggle className="[&>button]:h-10" />
-              <Button variant="secondary" className="h-11 px-4" onClick={() => void signOut()}>
+              <Button variant="secondary" className="h-11 px-4" onClick={() => { if (confirmLeave()) void signOut(); }}>
                 Sign out
               </Button>
             </div>
@@ -213,4 +215,15 @@ function AdminHeader() {
       )}
     </header>
   );
+}
+
+
+function ClassContent({ children }: { children: ReactNode }) {
+  const { group, selectedClass } = useGroup();
+  const pathname = usePathname();
+  const archived = selectedClass?.status === "archived" && pathname !== "/admin/settings";
+  return <div key={group} className="flex flex-1 flex-col">
+    {archived && <p role="status" className="mx-7 rounded-xl bg-amb-s p-3 font-bold">{selectedClass.name} · {selectedClass.year} · Archived — read-only. Open Settings to choose another class.</p>}
+    {archived ? <ClassArchive /> : children}
+  </div>;
 }
