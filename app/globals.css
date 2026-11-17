@@ -1,26 +1,162 @@
 @import "tailwindcss";
 
+/*
+ * CodeCS design tokens, copied from the "CodeCS Basic v2" design
+ * (design/CodeCS Basic v2.dc.html). Every color is a light-dark() pair, so the
+ * active palette follows `color-scheme`, which [data-theme] pins below.
+ *
+ * The build compiles light-dark() into variables that resolve on the element
+ * where a token is declared, so the tokens are declared again on .scheme-dark;
+ * otherwise a dark editor inside a light page would inherit light colors.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light dark;
+}
+
+:root,
+.scheme-dark {
+  --bg: light-dark(#ffffff, #0c1311);
+  --sf: light-dark(#f3f7f5, #141d1a);
+  --sf2: light-dark(#e7eeea, #1f2a26);
+  --pill: light-dark(#ffffff, #2b3833);
+  --ln: light-dark(#e1e8e4, #27342f);
+  --bd: light-dark(#8a9590, #6b7b74);
+  --ink: light-dark(#0e1714, #eef4f1);
+  --ink2: light-dark(#3a4842, #c3d0ca);
+  --ink3: light-dark(#5f6b66, #93a39b);
+
+  --mint: #4eddb0;
+  --mint2: light-dark(#2fcb9a, #6be6c0);
+  --on-mint: #06281d;
+  --mint-s: light-dark(#e3f9f1, #12302a);
+  --mint-s2: light-dark(#c7f2e3, #184139);
+  --mint-i: light-dark(#0b6e52, #6be6c0);
+
+  --amb: #ffc53d;
+  --on-amb: #2a1c00;
+  --amb-s: light-dark(#fff3d4, #362a0e);
+  --amb-i: light-dark(#8a5000, #ffd27a);
+  --cor-s: light-dark(#ffe9e5, #3a1a16);
+  --cor-i: light-dark(#b3261e, #ff9f85);
+  --vio: light-dark(#6a55e0, #b8a8ff);
+  --on-vio: light-dark(#ffffff, #16103a);
+  --vio-s: light-dark(#efebff, #231d42);
+  --vio-i: light-dark(#5b47c2, #c4b8ff);
+
+  --code-bg: light-dark(#fbfcfb, #0f1a16);
+  --code-bar: light-dark(#f1f5f3, #15221d);
+  --code-ink: light-dark(#0e1714, #e6eeea);
+  --code-gut: light-dark(#76827d, #6e8079);
+  --code-hl: light-dark(#efebff, #241e44);
+  --k: light-dark(#0e7a5c, #5ee8bf);
+  --f: light-dark(#5b47c2, #b8a8ff);
+  --s: light-dark(#9a5b00, #ffd27a);
+  --n: light-dark(#c2410c, #ff9f85);
+  --c: light-dark(#5f6e67, #7f938a);
+  --o: light-dark(#3a4842, #a9b8b1);
+
+  --canvas: light-dark(#dfe6e2, #070b0a);
+  --elev-card: 0 1px 2px rgba(14, 23, 20, 0.08), 0 10px 28px rgba(14, 23, 20, 0.08);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* The code editor defaults to the dark palette regardless of the app theme. */
+.scheme-dark {
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-sf: var(--sf);
+  --color-sf2: var(--sf2);
+  --color-pill: var(--pill);
+  --color-ln: var(--ln);
+  --color-bd: var(--bd);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink2);
+  --color-ink3: var(--ink3);
+  --color-mint: var(--mint);
+  --color-mint2: var(--mint2);
+  --color-on-mint: var(--on-mint);
+  --color-mint-s: var(--mint-s);
+  --color-mint-s2: var(--mint-s2);
+  --color-mint-i: var(--mint-i);
+  --color-amb: var(--amb);
+  --color-on-amb: var(--on-amb);
+  --color-amb-s: var(--amb-s);
+  --color-amb-i: var(--amb-i);
+  --color-cor-s: var(--cor-s);
+  --color-cor-i: var(--cor-i);
+  --color-vio: var(--vio);
+  --color-on-vio: var(--on-vio);
+  --color-vio-s: var(--vio-s);
+  --color-vio-i: var(--vio-i);
+  --color-code-bg: var(--code-bg);
+  --color-code-bar: var(--code-bar);
+  --color-code-ink: var(--code-ink);
+  --color-code-gut: var(--code-gut);
+  --color-code-hl: var(--code-hl);
+  --color-syn-k: var(--k);
+  --color-syn-f: var(--f);
+  --color-syn-s: var(--s);
+  --color-syn-n: var(--n);
+  --color-syn-c: var(--c);
+  --color-syn-o: var(--o);
+  --color-canvas: var(--canvas);
+
+  --font-sans: "Open Sauce Sans", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --shadow-card: var(--elev-card);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Base element styles live in the base layer so utility classes can override them. */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 15px/1.5 "Open Sauce Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  a {
+    color: var(--mint-i);
+  }
+
+  a:hover {
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--vio);
+    outline-offset: 2px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media print {
+  .no-print {
+    display: none !important;
+  }
 }

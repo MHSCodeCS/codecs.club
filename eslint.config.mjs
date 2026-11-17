@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Convex owns these generated SDK files.
     "convex/_generated/**",
+    // In-browser Python runtime and worker built by scripts/prepare-python.mjs.
+    "public/pyodide/**",
+    "public/python/**",
   ]),
 ]);
 

@@ -11,5 +11,8 @@ The specification has been split into focused guides. Start at the [documentatio
 - [UI requirements](docs/ui-design.md)
 - [Development and deployment](docs/deployment.md)
 - [Pending decisions and verification](docs/decisions-and-verification.md)
+- [Roadmap](docs/roadmap.md)
 
-These are agreed requirements, not completed features. Current setup and evidence are dated in the deployment and verification guides. Unresolved decisions are tracked explicitly rather than filled with unapproved defaults.
+The approved visual design, **CodeCS Basic v2**, is saved at [design/CodeCS Basic v2.dc.html](design/CodeCS%20Basic%20v2.dc.html).
+
+These are agreed requirements. What is built is tracked in the roadmap; current setup and evidence are dated in the deployment and verification guides. Unresolved decisions are tracked explicitly rather than filled with unapproved defaults.

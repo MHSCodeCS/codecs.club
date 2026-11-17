@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# In-browser Python runtime and worker (scripts/prepare-python.mjs)
+/public/pyodide/
+/public/python/
